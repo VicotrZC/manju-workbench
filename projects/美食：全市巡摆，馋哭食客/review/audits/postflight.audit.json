@@ -1,0 +1,295 @@
+{
+  "subject": "postflight",
+  "auditor": "subagent",
+  "verdict": "fail",
+  "summary": "本轮不是「生成失败」，是「上游写的东西没有落到提示词里，而当时没有任何程序在看」。八条缺陷里五条（B1 整拍、无台词、签名标记、正向否定锁、GEO 逐字、画风血缘）的检查现在已经写好并能机械抓到 —— 但它们是成片之后才写的：本轮 26 条工作流一条封条都没有（`review/audits/` 里至今 0 个 `.audit.json`，最早的审计文件出现在成片之后约 3 小时），run.py 现在的硬闸门对每一条都会以 AUDIT-01 拒绝提交。另外三条（屏上乱码文字、S03 大特写、围裙带/手比例/背景）里有两条至今一条检查都没有，第三条只能看图。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "error",
+      "layer": "prompt",
+      "code": "SHOT-05",
+      "claim": "成片是写实质感，而锁定的是候选 I（赛璐璐平涂＋卡通渲染）——根因在出首帧的那条工作流，不在 H3。",
+      "evidence": "workflows/FF_EP02SC01_shot.json:34 画风锁定句在第 663 字处、占比 12.6%（实测）；audit_rules.json:34 style_ratio_min.t2i=0.20；packet.json chain.errors[SHOT-05] 三条（WF-02 被改写 / WF-03 不在最前 / WF-04 占比 12.6%）；项目卡.md:19 画风已定稿候选 I；outputs/FF_EP02SC01_S01_00001_.png、FF_EP02SC01_S02_00001_.png、FF_EP02SC01_S03_00001_.png 三张不同镜的首帧候选都是照片质感、无描边无平涂（本轮我逐张看过，与用户判定一致）。",
+      "process_gap": "画风闸门只掐在「出首帧的那条工作流」上（SHOT-05），但出首帧之前没有任何程序跑过它 —— 工具与 run.py 的闸门是成片之后才提交的（git 0995f2f 14:39 成片 / 8c4adaf 17:31 闸门），生成期间零封条（`review/audits/` 里 0 个 `.audit.json`，最早的审计文件 `EP02SC01_S01_h3.verdict.json` 出现在 2026-09-20 17:33，晚于成片 mtime 14:35）。另外一个判据本身不牢：WF-03「画风句必须在最前」对已知正确样本 STYLE_I_H_mature 也叫（见 F11/P8），所以连「按哪条判」当时都还没定。",
+      "fix": "① 首帧工作流的画风句挪到描述段最前并把场景段砍到 ≤500 字（占比 ≥20%）；② 用 ≥6 个样本重新标定 style_ratio_min（现只有 3 个，03_待办与欠账.md:12 已登记）；③ 下一轮必须先跑 preflight→seal 再提交首帧。"
+    },
+    {
+      "id": "F2",
+      "level": "error",
+      "layer": "prompt",
+      "code": "WF-09",
+      "claim": "一场 110 字对白＋73 字 VO 的对话戏被做成全片无人说话的默片：四镜提示词全都声明「无人说话」。",
+      "evidence": "workflows/EP02SC01_h3.json:54 「Nobody speaks in this shot」＋同文件 :139 便签「**无台词是避开烧字幕最稳的办法**，本四镜全部无台词」；workflows/EP02SC01_S01_h3.json:139 同款；packet.json workflows[EP02SC01_h3/S01_h3/S03_h3].errors 各含 WF-09（3 条）；state.json:50 「本片全镜无台词，只有环境声」；script/EP02_SC01_菜市场买肉_戏.md:131 对白 110 字 / VO 73 字（B2–B5 全部有对白）。",
+      "process_gap": "分镜只被核到「认领了哪个拍号」，从没核到「拍里的五通道内容有没有落地」——对白和 VO 是戏层的硬内容，却是唯一没有任何程序在看的东西。而「无台词」这个决定来自旧线经验（review/旧线买肉四镜_经验与锁定.md 里的避烧字幕手段），被当成通则套在对话戏上，违反 规矩.md:404/§9（<d> 与禁字幕句不是二选一）。现在 WF-09 能抓对白，但 **VO 仍无任何检查**。",
+      "fix": "① 台词照官方写 <d>[Chinese] …</d>，同时保留 No subtitles 句；② VO 要么进提示词、要么登记为后期配音并给出音频文件（新增 VOICE-01，见 P3）；③ 「哪些通道必须进提示词」写进 audit_rules.json，不靠记忆。"
+    },
+    {
+      "id": "F3",
+      "level": "error",
+      "layer": "storyboard",
+      "code": "BEAT-01",
+      "claim": "戏的 B1 整拍（四点闹钟／空街只有环卫工人／骑小电驴赶到菜市）一帧都没有 —— 分镜层把它吞了。",
+      "evidence": "packet.json chain.errors[BEAT-01]；storyboard/SCN01_镜头表.json:22 S01 的 beats 只有 [\"B2\"]；storyboard/SCN01_GEO空间地图.md:79 却写着 S01 = B1–B2（预先分配的散文表）；script/EP02_SC01_菜市场买肉_戏.md:41 B1 = 7s；成片 700 帧 = 29.17s vs 戏的 38s（script 同文件:20）。",
+      "process_gap": "生成之前根本没有机器可读镜头表（现表是回填的，SCN01_镜头表.json:7 自述「按已批准的分镜表回填」）——节拍覆盖当时只存在于 GEO §三 的散文表里，而散文表把 B1 挂在 S01 上、实拍只拍了 B2，没有人核，也没有任何检查在算「戏的时长 vs 镜头总时长」（差的 8.8 秒正好是 B1）。",
+      "fix": "① 先出镜头表（含 beats 列）再出首帧，BEAT-01 在出首帧之前跑；② 补 B1 镜头，或按 BEAT-01 的 fix 回戏层删掉这一拍并由用户拍板；③ 新增 BEAT-03/04（节拍时长与总时长，见 P5）。"
+    },
+    {
+      "id": "F4",
+      "level": "error",
+      "layer": "asset",
+      "code": "WF-08",
+      "claim": "摊主长了胡子 —— 用户明确说过不要胡子；拍板只落到了「资产锚点图」，没落到「每一张首帧/每一镜的提示词」。",
+      "evidence": "audit_rules.json:58-59 positive_locks=[\"clean-shaven\"]、identity_note「用户 2026-09-21 拍板：敦厚老实，**不要胡子**」；workflows/EP02SC01_S01_h3.json:54 的 <Subject 2> 通篇没有 clean-shaven → packet.json workflows[EP02SC01_S01_h3].errors 含 WF-08（真问题）；workflows/FF_EP02SC01_shot.json:34 首帧提示词只写「下巴圆润，**面相敦厚老实**」，没有 clean-shaven，而且通篇没写「老板/the butcher」；项目卡.md:71 登记 00005–00008「有胡子」已废弃。",
+      "process_gap": "两处漏：① 首帧才是这张脸被定下来的地方（工具自己承认「成片的画风由首帧决定」），但 SHOT-05 只把 WF-02/03/04 从首帧工作流传上来（tools/pipeline_audit.py:420-430），**WF-07/08 不透传**；② 检查器 on_screen() 用登记称呼判出场（tools/pipeline_audit.py:232-237），中文首帧提示词写「一个四十岁上下的中年男人」→ 不算出场 → 角色类检查**静默跳过**（fail-open，连 WARN 都没有）。",
+      "fix": "① 把 identity_note/positive_locks 做成「每镜必写清单」，写进 audit_rules；② on_screen 判不出来时必须 ERROR（fail-closed），并允许登记中文描述别名；③ CHR 锚点接进 H3 参考图槽（见 F10/ATTR-01）。"
+    },
+    {
+      "id": "F5",
+      "level": "error",
+      "layer": "prompt",
+      "code": "WF-07",
+      "claim": "签名标记（闫清左眉尾小疤、摊主右手虎口旧刀痕）在四镜里大面积缺失，四张首帧的提示词一个都没写。",
+      "evidence": "packet.json workflows：EP02SC01_S01_h3.errors 含 WF-07 ×2（两人都没有）、EP02SC01_S03_h3 ×1、EP02SC01_h3 ×1（摊主的刀痕）；workflows/EP02SC01_S01_h3.json:54 的 <Subject 2>/<Subject 3> 都没有疤与刀痕；workflows/FF_EP02SC01_shot.json:34 四张首帧共用的提示词里两人都没有任何签名标记；pipeline/docs/01_资产规范.md:55 与 :255-263（§6.4：写进每一张图的提示词，生成后逐张核验）；项目卡.md:107 摊主刀痕落错手（已知未修）、:82-84 头部正面标志特征已漂（按 §6.4 应重出，尚未处理）。",
+      "process_gap": "和 F4 同源，且更根本：签名标记在规范里是「每一张图都必须写、生成后逐张核验」的硬要求，但闸门只加在 H3 提示词上；出首帧那一步（决定脸的那一步）完全没有身份检查，而 §6.4 的「生成后逐张核验」至今是纸面规定（没有任何程序或清单在跑）。",
+      "fix": "① SHOT-05 的透传集合加入 WF-07/WF-08；② 首帧工作流的提示词必须逐字含签名标记；③ 按 §6.4 出一份「资产逐张核验表」（人核），把已漂的头部正面重出。"
+    },
+    {
+      "id": "F6",
+      "level": "error",
+      "layer": "prompt",
+      "code": "WF-05",
+      "claim": "S03 的围裙带、举手机的手与摊主接不上、背景变成明亮大市场、五盏红灯是唯一光源失守 —— 文本层的根因是 GEO 空间地图被「转述」进提示词，不是逐字复制。",
+      "evidence": "本轮我按 tools/pipeline_audit.py 的 geo_block() 抽出 GEO 英文块（storyboard/SCN01_GEO空间地图.md:51-68）与三镜提示词逐字比对：workflows/EP02SC01_S03_h3.json:54、EP02SC01_h3.json:54 最长连续相同只有 **128 / 2254 字**，EP02SC01_S01_h3.json:54 连 GEOSPATIAL LOCK 抬头都没有；被删掉的包括 Under the counter（泡沫箱/筐/桶）、wet terrazzo 地面、以及 **No unmotivated light, no rim light, no lens flare**；防跳轴句 audit_rules.json:36 三镜都不在；而 workflows/EP02SC01_h3.json:139 便签承诺「四镜逐字相同」——三镜的 GEO 段实际互不相同。首帧层也不一致：outputs/FF_EP02SC01_S01_00001_.png 的木门在画面中偏右，FF_EP02SC01_S02_00001_.png 的木门在最左缘（同一 GEO 锁的 x 0 中线）。围裙带与手的比例只能看图：outputs/FF_EP02SC01_S03_00001_.png 里闫清已经穿着带肩带的围裙（提示词写的是「plain black crew-neck short-sleeve T-shirt」），且背景是明亮大市场＋白灯 —— 这两条在**首帧就已经错了**，H3 只是照抄首帧，把帐全记在 H3 头上是记错了对象。",
+      "process_gap": "「逐字复制进该场每个镜头」（01_资产规范 §2.3）只有脚本能保证，本轮靠手抄 → 抄成了转述，正是 规矩.md §9 记的「把转述当原文」那个病。另外「每剪一刀重写一遍站位」（§2.3 第三条）也是纸面规定，没有任何程序核对跨镜是否一致；跨主体属性串味（围裙带跑到闫清肩上）既没有规定也没有检查。",
+      "fix": "① GEO 段改成从 GEO 文件按锚点程序化抽取＋拼接，禁止手写（提示词由脚本生成）；② WF-05 失败时先算相似度，≥60% 报「转述」、<60% 报「缺失」，两种病的修法不同；③ 新增 GEO-03：同场各镜的 GEO 段必须两两逐字相同；④ 首帧先修（围裙、背景、光源），别再改 H3 文字。"
+    },
+    {
+      "id": "F7",
+      "level": "error",
+      "layer": "prompt",
+      "code": null,
+      "claim": "屏上出现乱码中文（红色横幅），而验收却写了「画面无乱码文字」——触发条件写在提示词里，验收结论是 agent 自己编的。",
+      "evidence": "workflows/EP02SC01_S01_h3.json:54 的 <Subject 1> 写了「a red banner overhead」，而**四镜 H3 提示词里没有任何一处英文双引号文字**（本轮实测：double-quoted strings = []，四镜皆无）；规矩.md:404「画面可见文字」用英文双引号逐个列出、逐个列全才清晰，**没定义的文字会糊成乱码符号**；项目卡.md:172 与 state.json:47 写着「画面无乱码文字 ✅」；script/EP02_SC01_菜市场买肉_戏.md:164（§五 item 4）早在开工前就写明「画面可见文字必须逐个列出」「建议底图不带字、文字走后期」；项目卡.md:291 待修 #3 也记着中文渲染从没干净过，项目卡.md:298 待修 #10 已复核「S01 首帧横幅是『吴常…』、同一块招牌两次出字不同就是乱码」并写明成片验收里那句「画面无乱码文字 ✅」不成立；pipeline/docs/06_审计闸门.md:20 自认「验收标准是我自己编的」。",
+      "process_gap": "三层同时漏：① 规矩 §10 的「画面可见文字」**一条程序检查都没有**（26 条工作流零覆盖，pipeline_audit.py 里连一个相关码都不存在）；② 感知类结论被 agent 当成事实写进项目卡与 state.json（违反 规矩.md:274 §5.C.11 / :275 §12），而 state.json:49 自己写着 verified_by_human=false；③ 戏层 §五「必须在出首帧之前拍板」的清单没有任何闸门读它——那 4 条一条都没拍板就开跑了。",
+      "fix": "① 新增 VIS-01（见 P1）：承载文字的物件必须跟登记过的英文双引号字面量；② 新增 SCRIPT-06（见 P7）：戏层悬置问题未拍板不许出首帧；③ state.json 的感知类断言一律标「待用户确认」，不许写成 ✅（STATE-01，见 P9）。"
+    },
+    {
+      "id": "F8",
+      "level": "error",
+      "layer": "storyboard",
+      "code": "WF-10",
+      "claim": "S03 没守住 85mm/1.4m 的大特写 —— 镜头表自己就把景别与英译写矛盾了，而实际画面宽窄没有任何检查。",
+      "evidence": "storyboard/SCN01_镜头表.json:56-62 S03 shot_size「大特写」/ 85mm / 1.4m / visible_w_m 0.59，但同一镜 :58 的 framing_en 写的是「A static close shot, camera at eye level」（close shot ≠ 大特写），而 H3 提示词照抄了这一句；storyboard/画幅1376x768_光学参数.md:78 大特写 = 画面高 0.33m → 85mm 需 1.396m（与 1.4m 吻合，说明数字是对的、错的是景别措辞）；pipeline/docs/06_审计闸门.md:162 明确承认「首帧是不是真的按 85mm/1.4m 取的景」机械抓不到。",
+      "process_gap": "镜头表内部「景别 ↔ 英译 ↔ 光学三列」没有任何自洽检查；visible_w_m 被 01_资产规范.md:162-164 要求「由公式算出、不许手填」，但 tools/pipeline_audit.py:228 的 SHOT_REQUIRED 里根本没有 visible_w_m，也从没复算过 —— 纸面要求没有落成程序。首帧/成片的实际取景只能靠视觉判断（原始素材也丢了，见 F9）。",
+      "fix": "① 新增 FRAME-01（见 P4）：复算 visible_w_m 与画面高、并强制 framing_en 取自登记模板；② 首帧出图后由带视觉的子 agent 按「画面宽 0.59m ±20%」看图判一次，最终仍由用户判（规矩 §5.C.11）。"
+    },
+    {
+      "id": "F9",
+      "level": "error",
+      "layer": "storyboard",
+      "code": "SHOT-02",
+      "claim": "四镜首帧全部没归档（mz_*.png 本机不存在），S02 的工作流被覆盖丢失 —— 这一场现在不可复现、不可审计。",
+      "evidence": "packet.json chain.errors：SHOT-02 ×4（mz_ep02sc01_s01_first.png / mz_ff_s02.png / mz_ff_s03.png / mz_ff_s04.png 四个都找不到）、SHOT-01（S02 缺 workflow 字段）；storyboard/SCN01_镜头表.json:88-93 known_gaps ②③ 自述；workflows/EP02SC01_h3.json:139「这个文件被跑了 4 次」；项目卡.md:156 把「可复用 H3 模板（跑 4 次）」写成正常做法；pipeline/docs/03_待办与欠账.md:10-11 已登记这两笔欠账；本轮 git 历史里也查不到「用的是哪一条 take」——.work/concat_list.txt 只记 4 个文件名（S01_00002、S02_00001、S03_v2_00001、S04_00001），成片是云端 ffmpeg concat 出来的，剪辑单不存在。",
+      "process_gap": "「一镜一工作流」没有任何程序强制（WF-16 只查 SaveVideo 前缀与 LoadImage，不查「同一个文件被两镜引用」）；首帧的落盘路径与镜头表登记的名字是两套（SaveImage 前缀写 meishi/FF_EP02SC01_S0x，镜头表却登记 mz_*.png），中间那次改名/上传没有任何记录；成片层的组装完全没有闸门（成片对不上任何 manifest）。",
+      "fix": "① 一镜一文件（<场次>_<镜>_h3.json），新增 WF-17 查重（见 P6 fix）；② 首帧出图后立刻归档到 assets/FF/ 并把真实文件名写回镜头表；③ 新增剪辑单（storyboard/剪辑单.json：镜→take 文件），成片必须由它生成并核对总帧数。"
+    },
+    {
+      "id": "F10",
+      "level": "error",
+      "layer": "asset",
+      "code": null,
+      "claim": "角色资产（CHR-01/CHR-02 五视图、干净脸、签名标记）从头到尾没有接进任何一镜的生成路径 —— 资产层做完了，但成片与它无关。",
+      "evidence": "本轮实读三个 H3 工作流 JSON：EP02SC01_h3.json / EP02SC01_S01_h3.json / EP02SC01_S03_h3.json 的 MiniMaxH3ReferenceToVideo 节点 inputs 只有 ref_images.ref_image_0（各文件 :43-52），整个文件只有一个 LoadImage（各文件 :37，值为 mz_ff_s0x.png）；而 audit_rules.json:49-52、:60-63 登记的 CHR/CHR01_*__nohead.png、CHR/CHR02_*.png 在 assets/CHR/ 里齐全（本轮列目录确认 4 个文件在位）；旧线用的是四个参考槽（review/旧线买肉四镜_经验与锁定.md:83-90：首帧/老板/男主/九宫格）。",
+      "process_gap": "CHAIN-02 只核「资产文件在不在位」（01_资产规范 §〇 无图不进分镜），不核「这一镜到底有没有把它喂进去」——于是「资产已锁定」这句话在流程里成立，在成片里不成立；身份只能从首帧文字里来，而首帧文字里既没有签名标记也没有 clean-shaven（F4/F5），首帧又是中文提示词、角色检查静默跳过。",
+      "fix": "① 新增 ATTR-01（见 P2）：出场角色的锁定资产必须出现在该镜工作流的参考图槽里；② 参考图槽数 ≥ 该镜出场角色数（旧线四槽的做法写回规范）；③ 首帧工作流也必须把角色锚点接进去，不能只靠文字。"
+    },
+    {
+      "id": "F11",
+      "level": "warn",
+      "layer": "process",
+      "code": null,
+      "claim": "记录层已经过期或自相矛盾，下一轮会照着错的教训走。",
+      "evidence": "① 项目卡.md 的坑 0 已在本次审计进行期间被更正（项目卡.md:304-322「原记载…这条记错了」），但修正没有同步到机器可读状态：state.json:40 approvals 仍写着被推翻的「必须走 t2i；edit 合成会继承底图旧画风（2026-09-21 实测否决）」。② 项目卡.md:172 成片表里的「人工核验…画面无乱码文字 ✅」仍在，而更正写在 126 行之外的 :298（「这条验收结论不成立」）——一条已作废的验收结论没有被就地作废。③ state.json:23-25 还写着 script/storyboard/prompts = not_started，而剧本、镜头表、26 条工作流、成片都已存在（state.json:43-51 自己就记着成片）。④ pipeline/docs/03_待办与欠账.md:9-13 五条欠账全部是「新检查器抓到的」；台词/VO、B1 丢失、乱码文字、大特写、围裙带这五条一条都没进表——欠账表的覆盖面与「当时有什么检查器」高度重合。⑤ audit_rules.json:19 自述英文画风锁定句是自加的、待用户确认，但它现在被 WF-02 当 ERROR 强制在每一条 H3 上；同理「不要胡子」这条用户拍板只存在于 audit_rules.json:59，项目卡 §拍板记录 里没有这一行。",
+      "process_gap": "没有任何检查在读「项目卡/state.json/待办表 与实际文件、与其它文档是否一致」。规矩 §3 让新窗口先读项目卡与 state.json 接手 —— 这两份现在都会把下一个窗口带偏。",
+      "fix": "① 把项目卡 §本项目的坑 0 的更正同步进 state.json:40，并把 项目卡.md:172 的「画面无乱码文字 ✅」就地作废（指向 :298 的复核）；② 更新 state.json 的 text_layer 与 pipeline_status；③ 把 audit_rules 里用户拍板过的条目（clean-shaven 等）回写进项目卡 §拍板记录；④ 新增 STATE-01（见 P9）把这类不一致变成 ERROR。"
+    },
+    {
+      "id": "F12",
+      "level": "warn",
+      "layer": "process",
+      "code": "WF-00",
+      "claim": "tools/pipeline_audit.py 自身有 9 处设计缺陷：既有静默盲区（真问题抓不到），也有大面积误报（把好样本判成坏）。",
+      "evidence": "本轮实测（26 条工作流 90 条 ERROR，真问题 15 / 误报 75；chain 9 条全真）：① on_screen(232-237) 只认登记称呼 → 中文提示词的角色检查静默跳过（FF_EP02SC01_shot.json:34 因此完全不查角色）；② upstream_text(318-350) 只认 CLIPTextEncode → 5 条 edit 链工作流（CHR01_head_front/CHR01_view/CHR02_view/FF_A/FF_B，提示词实际在 TextEncodeQwenImageEditPlus，见 CHR01_head_front.json:51）被判 WF-00「取不到正向提示词」并**跳过其余全部检查**；③ SHOT-05(420-430) 只透传 WF-02/03/04，身份类 WF-07/08 不透传到首帧工作流；④ WF-12(646-679) 用全局 canvas [1376,768] 比对所有工作流 → 4 条资产工作流（768×1152 / 1664×928 / 1920×1152，项目卡.md:99、:160 明确规格）被误报；⑤ WF-06(555-561) 无条件要求禁字幕句 → 18 条 t2i 工作流被误报（该句是 规矩.md:404/§9 的 H3 台词场景要求）；⑥ WF-05 用全局 geo_file → 18 条非本场工作流（生煎餐车探针、角色卡）被误报；⑦ WF-02/03/04 作用于探针工作流 → STYLE_A–I 被误报（它们是「候选」探针，本来就该用别的画风句，锁定句是后来才有的），WF-03 连已知正确的 STYLE_I 也叫；⑧ 06_审计闸门.md:82 列出 visible_w_m 为必填字段，但代码 SHOT_REQUIRED(228) 里没有它，从没复算；⑨ seal 的 waiver 只按 code 豁免(838-846) → 一旦豁免 WF-03，下一轮真把画风句吊到末尾也不会报。",
+      "process_gap": "pipeline/docs/06_审计闸门.md:169 写着「本程序的每一条检查都在已出问题的真实样本上跑过，确认它报的都是真问题」——这句被本轮 75 条误报直接推翻；规矩.md:277 §5.C.14「会误报的检查器比没有检查器更糟」没有落成任何机制（没有 selftest、没有已知正确样本集、没有按工作流分类的适用范围）。",
+      "fix": "见 P8（TOOL-01 selftest）＋ 逐条改法：on_screen 判不出即 ERROR 并支持中文别名；upstream_text 支持 TextEncodeQwenImageEditPlus 等文本节点，取不到时区分「提取失败」与「空」；SHOT-05 透传 WF-07/08；audit_rules 增加按工作流分类的 canvas/geo/style 适用范围；WF-06 只对含 MiniMaxH3 节点的工作流生效；WF-03 降为 WARN 并重新标定；waiver 支持 (code, subject) 粒度。"
+    }
+  ],
+  "process_findings": [
+    {
+      "id": "P1",
+      "claim": "「画面可见文字必须逐个列出」是 规矩.md §10 的硬要求，却一条程序检查都没有；没定义的文字必然糊成乱码（本轮 F7 的乱码红横幅就是这样来的），而乱码只能靠人眼发现。",
+      "evidence": "规矩.md:404；本轮实测四镜 H3 提示词英文双引号字面量数 = 0，而 EP02SC01_S01_h3.json:54 写了 a red banner overhead；项目卡.md:291 待修 #3 记着中文渲染从未干净；tools/pipeline_audit.py 全文没有相关检查码。",
+      "proposed_check": {
+        "code": "VIS-01",
+        "input": "每条工作流的正向提示词（t2i 取 CLIPTextEncode / TextEncodeQwenImageEditPlus 的 widgets_values[0]；H3 取六段全文）＋ audit_rules.json 新增 on_screen_text（本场允许出现的文字→英文原文的表）＋ 内置的「承载文字物件」词表（banner/sign/signboard/label/price card/neon/poster/text/招牌/横幅/价签/字幕）。",
+        "rule": "① 提示词命中任一承载文字物件词时，该物件所在的同一句（或同一 <Subject n> 块）内必须出现至少一个英文双引号字面量；命中而该范围内引号数 = 0 → ERROR「画面可见文字未逐个列出（未定义的文字会糊成乱码符号）」。② 提示词里所有引号字面量的集合必须 ⊆ on_screen_text；出现未登记字面量 → ERROR。③ on_screen_text 为空而提示词命中物件词 → ERROR（要先拍板「底图不带字、文字走后期」还是「逐个列出」）。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P2",
+      "claim": "「无图不进分镜」只检查了图在不在盘上，没检查图有没有真的进生成路径 —— 资产层与成片因此可以完全脱钩（本轮 F10）。",
+      "evidence": "audit_rules.json:49-52、:60-63 登记了 4 个 CHR 锚点文件且都在位；三个 H3 工作流的 H3 节点只有 ref_images.ref_image_0（EP02SC01_S01_h3.json:43-52），全文件只有一个 LoadImage（:37）；旧线是 4 个参考槽（review/旧线买肉四镜_经验与锁定.md:83-90）。",
+      "proposed_check": {
+        "code": "ATTR-01",
+        "input": "镜头表每镜的 workflow / first_frame_workflow ＋ audit_rules.json characters[].files ＋ 该工作流 JSON 里所有 LoadImage 节点的 widgets_values[0] 与 H3 节点 inputs 里 ref_images.ref_image_n 的连线＋ 提示词的出场判定（出场判定改成 fail-closed）。",
+        "rule": "① 对每一镜，凡在该镜提示词里出场的角色（match 命中，或该场 characters_on_screen 登记必须出场），其 files 中至少一张必须出现在该镜工作流的参考图槽里；否则 ERROR「角色 X 出场但它的锁定资产没有接进这一镜」。② 参考图槽数量 < 该镜出场角色数 → ERROR（旧线四槽的做法）。③ 首帧工作流同样适用（身份是在首帧定下来的）。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P3",
+      "claim": "WF-09 只覆盖对白，VO（内心独白）没有任何落点检查 —— 本轮 B1–B4 的 73 字 VO 与对白一起消失了，只有对白会被报出来。",
+      "evidence": "tools/pipeline_audit.py:584-605（WF-09 只看 beats[b][has_dialogue]）；parse_script 已经把五通道（VO/对白/UI/花字/画面）与 vo_chars 都解析出来了，却没被任何检查使用；script/EP02_SC01_菜市场买肉_戏.md:131 VO 73 字；state.json:50「本片全镜无台词，只有环境声」。",
+      "proposed_check": {
+        "code": "VOICE-01",
+        "input": "戏的节拍五通道（parse_script 已有）＋ 镜头表 beats ＋ 该镜提示词全文 ＋ audit_rules.json 新增 voice_plan（每句语音的落点：in_prompt 或 post_dub + 音频文件名）。",
+        "rule": "对每一镜认领的节拍里的每一句语音：对白句 → 提示词必须含 <d>[…]</d> 且该句原文（去标点/去空白）出现在 <d> 段内；VO 句 → 原文必须出现在 overall_soundscape 或 <d> 段内；两者都不满足时，该句必须在 voice_plan 里登记为 post_dub 且对应音频文件存在。任一句三者皆不满足 → ERROR「戏里的第 N 句语音没有任何落点（既不在提示词、也没有后期配音文件）」。缺 token / 解析不到一律 ERROR（fail-closed），不许静默跳过。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P4",
+      "claim": "镜头表的「景别 ↔ 英译 ↔ 光学三列」没有自洽检查，visible_w_m 从没被复算过 —— S03 因此同时写着「大特写」和「close shot」（本轮 F8）。",
+      "evidence": "storyboard/SCN01_镜头表.json:56-62；storyboard/画幅1376x768_光学参数.md:78（大特写=画面高 0.33m→85mm 需 1.396m）；01_资产规范.md:162-164（visible_w_m 由公式算出、不许手填）；tools/pipeline_audit.py:228 SHOT_REQUIRED 无 visible_w_m；storyboard/画幅1376x768_光学参数.md:104 自注 pipeline/qc/check_framing.py「待建」。",
+      "proposed_check": {
+        "code": "FRAME-01",
+        "input": "镜头表每镜的 shot_size / lens_mm / dist_m / visible_w_m / framing_en ＋ storyboard/画幅1376x768_光学参数.md §二公式与 §四景别表 ＋ audit_rules.json 新增 shot_size_en（景别→英文取景句模板）。",
+        "rule": "① 复算 visible_w_m = 36.0 × dist_m / lens_mm，与表内值偏差 >1% → ERROR（不许手填）。② 复算画面高 H = dist_m × 20.093 / lens_mm，映射到 §四 最近档景别，与 shot_size 不一致 → ERROR。③ framing_en 必须逐字等于 shot_size_en[shot_size] 登记的模板，自由文本 → ERROR。④ 实际画面宽窄仍需视觉判断（06 §七），本检查只保证「表、提示词、光学三列」三者自洽。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P5",
+      "claim": "BEAT-01 只能发现「没人认领」，发现不了「认领了但装不下」—— 本轮 S01 只拍 7.29s 却要演 B1+B2 的 13 秒，以及全片比戏短了 8.8 秒，都没有任何检查。",
+      "evidence": "storyboard/SCN01_GEO空间地图.md:79（S01 = B1–B2，共 13s）；storyboard/SCN01_镜头表.json:22（S01 只认领 B2，175 帧 = 7.29s）；script/EP02_SC01_菜市场买肉_戏.md:20（本场 38s）与 :122-134（逐拍秒数）；成片 700 帧 = 29.17s（state.json:45）。",
+      "proposed_check": {
+        "code": "BEAT-03",
+        "input": "戏的节拍表头里已有的时间范围（parse_script 已抓 header，如 0:00–0:07（7s））＋ 镜头表 beats 与 frames ＋ fps。",
+        "rule": "① 每个被认领的节拍：Σ(认领它的镜头 frames)/fps 与该拍时长偏差 >±30% → ERROR「节拍 Bx 被认领了但装不下」。② Σ 全部镜头 frames/fps 与戏 §一 的总时长偏差 >±15% → ERROR「成片总时长与戏不符」。③ 认领了但 frames 为 0 → ERROR。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P6",
+      "claim": "闸门本身没有「跑过没有」的留痕：本轮 26 条工作流零封条、成片照样出来了，而 run.py 的 --skip-gate 不留任何记录，事后无法证明哪一版产物是审过的。",
+      "evidence": "projects/…/review/audits/ 里 0 个 `.audit.json` 封条（目录此前不存在，由 `audit_path()` 在 postflight 时 mkdir 出来；最早的审计文件是 2026-09-20 17:33 的 `EP02SC01_S01_h3.verdict.json`，晚于成片 mtime 14:35）；项目卡.md:168 成片存在；tools/run.py:300-320、:366（run_audit_gate 缺失即拒绝，--skip-gate 可跳过）；git：0995f2f（成片，2026-09-20 14:39）与 8c4adaf（审计闸门，17:31）；成片 mtime 2026-09-20 14:35。",
+      "proposed_check": {
+        "code": "GATE-01",
+        "input": "review/audits/*.audit.json 的封条与 sealed_at ＋ 每条工作流的 sha256 ＋ .work/audit/skips.log（run.py 每次 --skip-gate 追加：时间/项目/工作流/理由）＋ outputs 里产物的 mtime。",
+        "rule": "① --skip-gate 必须同时给 --skip-reason，否则 run.py 直接拒绝（退出码 2）。② postflight 读 skips.log：本项目窗口内出现任何一次 skip → ERROR「本轮有 N 次绕过审计闸门」。③ 产物 mtime 早于该工作流封条 sealed_at，或该工作流根本没有封条 → ERROR「产物不是审计过的那一版生成的」。④ 每条产物必须在 review/audits/ 找到对应的封条，否则 ERROR。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P7",
+      "claim": "戏层自己写着「必须在出首帧之前拍板」的悬置问题清单，没有任何闸门读它 —— 本轮 4 条一条未拍板就开跑，其中第 4 条（画面可见文字）直接造成了 F7 的乱码。",
+      "evidence": "script/EP02_SC01_菜市场买肉_戏.md:157-164（§五 4 条：画风冲突/一点五形态/密度最终值/画面可见文字）；其中 :164 已写明「建议底图不带字、文字走后期」；EP02SC01_S01_h3.json:54 却写了 a red banner overhead；audit_rules.json 与 state.json 里都没有这 4 条的拍板记录。",
+      "proposed_check": {
+        "code": "SCRIPT-06",
+        "input": "script/*_戏.md 的「## 五、⚠️ 本场尚未解决的问题」表（逐行解析编号与要求）＋ audit_rules.json 新增 settled_script_questions（每条：编号 / 拍板人 / 日期 / 结论 / 落到哪个文件）。",
+        "rule": "该表里每一条若在 settled_script_questions 里找不到对应记录 → 在**出首帧的 preflight** 里 ERROR「戏层第 N 条悬置问题未拍板就进入生成」；已拍板但结论未落到指定文件（该文件不存在或不含该结论的关键词）→ ERROR。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P8",
+      "claim": "检查器自己没有自检机制，26 条工作流报出 90 条 ERROR 里 75 条是误报（chain 9 条全真），而 06_审计闸门.md:169 却声称「每一条检查都在真实样本上跑过、报的都是真问题」。",
+      "evidence": "本轮计数：逐工作流真问题 15（WF-05×3、WF-07×4、WF-08×1、WF-09×3、WF-10×1、WF-02/03/04 在 FF_EP02SC01_shot 上各 1）／误报 75（WF-06 18、WF-05 在非本场 18、WF-02 14、WF-03 11、WF-04 5、WF-00 5、WF-12 4）；STYLE_I_H_mature（用户选定画风的来源样张）被 WF-02/WF-03 判 ERROR；5 条 edit 链被 WF-00 判「空提示词」；4 条资产工作流被 WF-12 判画布违规。",
+      "proposed_check": {
+        "code": "TOOL-01",
+        "input": ".work/audit/selftest.json 登记的已知正确样本（至少：STYLE_I_H_mature＝选定画风来源、CHR01_body_neutral＝768×1152 资产规格、CHR01_head_front＝edit 链、EP02SC01_h3＝H3 模板、SCN01_pork_stall_hero＝1664×928 场景图），每条含「期望零 ERROR」或「期望的具体码」。",
+        "rule": "python tools/pipeline_audit.py selftest <项目> 对每个样本跑全量检查：出现任何未被显式登记为「已知误报」的 ERROR → 该次 selftest 失败，并把该检查码标为「不可信」；任何新增或修改检查在合并前必须先过 selftest（把 规矩.md:277 §5.C.14 落成程序）。当前这批样本会让 WF-02/WF-03/WF-05/WF-06/WF-12/WF-00 当场失败。",
+        "implementable": true
+      }
+    },
+    {
+      "id": "P9",
+      "claim": "state.json / 项目卡 / 待办表 三者与实际文件、与彼此之间没有任何一致性检查，而它们正是 规矩 §3 规定的接手入口。",
+      "evidence": "state.json:23-25（script/storyboard = not_started，而剧本、镜头表、26 条工作流、成片都在）；state.json:47 与 项目卡.md:172（感知类断言写成 ✅，同文件 :49 verified_by_human=false）；项目卡.md:172 的「画面无乱码文字 ✅」与 :298 的更正并存、state.json:40 仍写着被推翻的 t2i 教训（项目卡.md:304-322 已就地更正但没同步到机器可读状态）；audit_rules.json:19（英文画风句自述待用户确认，却被 WF-02 强制）。",
+      "proposed_check": {
+        "code": "STATE-01",
+        "input": "state.json（text_layer.*.status、approvals、pipeline_status.finished_film.agent_checks/verified_by_human、outputs）＋ 项目卡.md（文本层进度表、资产清单、待修表）＋ audit_rules.json（style_locks / characters）＋ 实际文件系统。",
+        "rule": "① text_layer.*.status 与实际文件存在性矛盾（有产物却写 not_started）→ ERROR。② finished_film.agent_checks 里出现感知类断言（无乱码文字/机位未漂/构图一致/像不像）而 verified_by_human=false → ERROR「感知类结论不许由 agent 记成事实（规矩.md:274 §5.C.11）」。③ audit_rules.json 的每条 style_locks 必须能在 项目卡.md 里逐字找到，找不到 → ERROR「锁定件未经用户确认」（本轮英文句即如此）。④ 项目卡「文本层进度」表与 state.json text_layer 不一致 → ERROR。",
+        "implementable": true
+      }
+    }
+  ],
+  "blocking": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10"
+  ],
+  "waivers": [
+    {
+      "code": "WF-06",
+      "reason": "误报：禁字幕句是 规矩.md:404/§9 针对 H3 台词场景的要求（<d> 与禁字幕句不是二选一），本轮报出的 18 条全部是 t2i 工作流（STYLE_A–I 画风探针、CHR/SCN 资产卡、STAB 稳定性探针、两条首帧工作流），静帧没有「烧字幕」这个概念。建议把 WF-06 限定为含 MiniMaxH3 节点的工作流后才生效。注意：豁免只对本轮这批 t2i 工作流成立，不含任何 H3 镜头工作流。"
+    },
+    {
+      "code": "WF-12",
+      "reason": "误报：报出的 4 条全是资产工作流（CHR01_body_neutral / CHR02_butcher_body_neutral 768×1152、SCN01_pork_stall_hero 1664×928、SCN01_pork_stall_9grid 1920×1152），这些画布是 项目卡.md:99 与 :160 明确的设计规格，不是违规。根因是 audit_rules.json 只有一个全局 canvas，缺按工作流分类的画布登记。"
+    },
+    {
+      "code": "WF-00",
+      "reason": "误报（提取器盲区，不是空提示词）：5 条 edit 链工作流（CHR01_head_front / CHR01_view / CHR02_view / FF_EP02SC01_A_semireal / FF_EP02SC01_B_guochuang）的提示词在 TextEncodeQwenImageEditPlus 节点里（例：CHR01_head_front.json:51 有完整提示词），而 upstream_text() 只认 CLIPTextEncode（tools/pipeline_audit.py:328-330）。副作用更严重：这 5 条工作流因此跳过了其余全部提示词检查，属静默盲区，必须修。"
+    }
+  ],
+  "subjects": {
+    "script/EP02_SC01_菜市场买肉_戏.md": "67d6caf615404cb8e7ff181c80f8a1d3010f229e7a001c532c84bb4f5692fe16",
+    "storyboard/SCN01_GEO空间地图.md": "718a287bf3effcc6659d929418c57a567c6808699f36b611ddb9bb74f246d721",
+    "storyboard/SCN01_镜头表.json": "17a0a8447b7e194c4a64f29d0c58b1eb19b2b4c514875b80bac624828e3038c4",
+    "项目卡.md": "47bb17e43bc279b59e38fe3a45c29c2c5a840cfc60c4afc1a55895ead81d1279",
+    "storyboard/画幅1376x768_光学参数.md": "cccbe75ac7759fb10608f78d13e99f644622a2199be3fb3a2e511075f43b6304",
+    "workflows\\CHR01_body_neutral.json": "d49af7a7eb61a9b3fd25d7f482177a41cb204ccafedc39ff9f69304cf122b0fd",
+    "workflows\\CHR01_head_front.json": "72eaef5fee7e566b178b06354106c203203bc9e11d3ab3b70ea14ea4f4c234de",
+    "workflows\\CHR01_view.json": "1bdd5de2c945e298380f7fc768a01a5a65cbf0ab317f5a06fee5c84fabdd4f92",
+    "workflows\\CHR02_butcher_body_neutral.json": "a2ab616e572b0492e44a21a2a62319d5e6a14863bb6a112c713ab23bba5de8e6",
+    "workflows\\CHR02_view.json": "99a4708de3dcb15b4f5f4db0e95050f894ebd1117902955367196cde007d3699",
+    "workflows\\EP02SC01_h3.json": "feff71002f351dce939d32aa7d247ff6e21aa539d6fac23b552a4053ac9115d8",
+    "workflows\\EP02SC01_S01_h3.json": "e2fd44d41b35e371ae0e69ebf95334e755d4c01f1105785df7dbdf5fd084916c",
+    "workflows\\EP02SC01_S03_h3.json": "ff0389db372fcaf2218707d60034e3fd300d070a68c0340a5a3366ef6e437a1d",
+    "workflows\\FF_EP02SC01_A_semireal.json": "8b6ad785d4ca5ecae205210724ac971101b51bdfd0b8e9f7638fe4bcc931e14e",
+    "workflows\\FF_EP02SC01_B_guochuang.json": "0ea94a41adc6a47cd4b20116f4d9c215409119a8e77c8919c46849ec6a7a1011",
+    "workflows\\FF_EP02SC01_C_guochuang_t2i.json": "fae96e04dd735ed37f1040297fb4e5c78dbc9897a06ebefb7a7eab53b2063a4e",
+    "workflows\\FF_EP02SC01_shot.json": "e10017866c2e3a3edb430d919ba59fb1e1a2e792723e362789f43b4e28283dd3",
+    "workflows\\SCN01_pork_stall_9grid.json": "9659c08c16d4071bf8a0380da71b5fc087ee58e59fdfda204957e8e0898dfab9",
+    "workflows\\SCN01_pork_stall_hero.json": "b59688828031df196c3718397a202cbf3dc5efda6d23f7e83d5e90fc5ea25e85",
+    "workflows\\STAB_01_night_double.json": "3e9fa73dc7dd72a45e9ad6378a40f49e5597dd6adfcb94ac4c654485e55c9b96",
+    "workflows\\STAB_02_system_space.json": "be9dccde6ad64032f9b25ad7e8a1904bbaeadb1a03ade74dc86fc323463e7199",
+    "workflows\\STAB_03_food_closeup.json": "36cc5430d9d1aae058fa5eaf750226131114655f4d9de8a7ebb272a7fd44ec0a",
+    "workflows\\STYLE_A_shinkai.json": "a26d82ebbec3a7e4847550c64b781c0fa47701cb23dee1bd13a3b805af06bb56",
+    "workflows\\STYLE_B_pixar.json": "8250e61968c1f193bc5a4c04e03cd2906dcd930e8994f9236a0c7778c644a36b",
+    "workflows\\STYLE_C_realistic.json": "e471577d7baebe29e65b640a1c024a00e90de3da3e9ab607ee2d1a5dde7489ba",
+    "workflows\\STYLE_D_guoman.json": "8018fea5eaf65b291f8afc1bc05ca1934e4912111fcc058c3615a8ae70c77e00",
+    "workflows\\STYLE_E_guochuang3d.json": "71dbaafcd2587c23acf2bbb13e9621fa86d6d749db8809044306be674f9ae5d0",
+    "workflows\\STYLE_F_guochuang_film.json": "4667da19156ba98259beb78201f95820e493b3d8fed8c1bf9249553031aff282",
+    "workflows\\STYLE_G_anime3d_game.json": "4e0b6b03ed94c724ac66d52f57b61ebc2a95e4be2929d5be1c8ab2cb3c4270f3",
+    "workflows\\STYLE_H_Ebody_Gface.json": "3be4913ca75ec6b20064ab7dfafb5f5a53a535c1f5320bd1948546468a4da6a9",
+    "workflows\\STYLE_I_H_mature.json": "e1619415c0e1ba4226e923e4938c0c9ebb8bfc1f3dc746e3d8c5a888c7e3595d",
+    "audit_rules.json": "c27ab0018a5e40f924877936cb59c47fce82f4baf3f2232487cef28b7362f77c"
+  },
+  "sealed_at": "2026-09-20T17:45:08",
+  "sealed_by": "tools/pipeline_audit.py seal",
+  "packet": ".work\\audit\\packets\\美食：全市巡摆，馋哭食客.postflight.packet.json",
+  "mechanical_at_seal": {
+    "errors": 15
+  }
+}

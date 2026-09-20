@@ -295,7 +295,8 @@ def load_shot_table(proj: Path, rules: dict) -> tuple[dict, Report]:
                 # 把真名报出来。否则一个从来没存在过的名字能一辈子挂在表里
                 # （并且 WF-16 会因为"两边都指向同一个不存在的名字"而静默通过）。
                 drift = sorted(p.name for p in (proj / "outputs").glob(f"*{sid}*")
-                               if p.is_file())
+                               if p.is_file() and p.suffix.lower() in
+                               (".png", ".jpg", ".jpeg", ".webp"))
                 rep.error("SHOT-02", f"镜头 {sid} 的首帧文件找不到：{ff}",
                           searched=[str(c.relative_to(proj)) for c in cand],
                           likely_real=[str((proj / 'outputs' / d).relative_to(proj))
@@ -1121,13 +1122,17 @@ def cmd_status(proj: Path, rules: dict) -> int:
     crep.print()
     print("\n审计封条：")
     d = proj / "review" / "audits"
-    if not d.exists() or not list(d.glob("*.json")):
+    # ⚠️ 只认 `*.audit.json` —— 同目录下的 `*.verdict.json` 是 agent 写的判定，
+    # 不是封条，拿它去 verify 会报一堆假的 AUDIT-01。
+    seals = sorted(d.glob("*.audit.json")) if d.exists() else []
+    if not seals:
         print("  （一条都没有）")
-    for f in sorted(d.glob("*.json")):
+    for f in seals:
+        sub = f.name[: -len(".audit.json")]
         v = json.loads(read(f))
-        rc = cmd_verify(proj, f.stem, rules, quiet=True)
+        rc = cmd_verify(proj, sub, rules, quiet=True)
         state = {0: "✅ 有效 pass", 1: "❌ 判定 fail", 2: "⌛ 缺失/过期"}[rc]
-        print(f"  - {f.stem:<28} {state}   sealed {v.get('sealed_at','?')}")
+        print(f"  - {sub:<28} {state}   sealed {v.get('sealed_at','?')}")
     return 0
 
 

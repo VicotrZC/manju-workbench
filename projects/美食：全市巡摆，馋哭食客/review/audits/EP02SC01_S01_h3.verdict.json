@@ -2,7 +2,7 @@
   "subject": "EP02SC01_S01_h3",
   "auditor": "subagent",
   "verdict": "fail",
-  "summary": "判据变了，按流程重审：本轮在 17:41 的代码上重跑 preflight（审计包 17:41:36，晚于代码 mtime 17:41:27，即新检查 WF-18/WF-19/WF-20/WF-22/SHOT-06/WF-09b 全部覆盖到了），结论不变 —— fail。S01 认领的 B2 五条通道里，三句对白与一句 VO 仍然一条没进提示词（WF-09 声明默片 + WF-09b 逐条报缺 4 条），GEO 块、两个签名标记、摊主的正向否定锁仍然缺失，首帧画风三条闸门仍然不过，SHOT-06 新报出首帧工作流被四镜共用。新增的机械检查里，我上一轮提的两条口径问题已被修正（WF-20 改成 34 字/85% 的 WARN，WF-09b 改成「必须落在某个 <d>…</d> 内」并剥掉说话人前缀），本轮 17 条 ERROR 逐条复核全部属实 —— waivers 为空，0 条误报。",
+  "summary": "判据又变了一轮，按流程再审一次：本轮钉在 pipeline_audit.py 17:44:32 / 审计包 17:44:52 上，结论仍然 fail。S01 认领的 B2 五条通道里，三句对白与一句 VO 一条没进提示词（WF-09 报默片 + WF-09b 逐条报缺 4 条），GEO 块、两个签名标记、摊主的正向否定锁仍然缺失，首帧画风闸门不过，SHOT-06 报出四镜共用一个首帧工作流。这一轮你按我上一条意见改了两处（WF-19 挪到 chain 层只报一次；SHOT-05 的传播从 WF-02/03/04 扩到 WF-07/08/22），传播扩了以后**多报出 3 条真的问题**：首帧提示词里也没有两个签名标记、也没有 clean-shaven —— 身份锚从来没进过首帧（而首帧才是把身份烙进成片的那一步）。机械 ERROR 从 17 条涨到 21 条，逐条复核**全部属实，waivers 仍为空**。",
   "beat_verdicts": [
     {
       "beat": "B2",
@@ -16,28 +16,28 @@
       "channel": "对白",
       "text": "闫清：「老板，这猪肉怎么卖啊！」",
       "in_prompt": false,
-      "evidence": "无对应句。WF-09b 实测报缺（missing 列表第 1 条 = 老板，这猪肉怎么卖啊！）；summary 写 Nobody speaks in this shot；detailed_description 写 no dialogue is spoken and nobody's lips move；prompt 里 <d> 块数 = 0。"
+      "evidence": "无对应句。WF-09b 实测报缺（缺 4 条中的第 1 条 = 老板，这猪肉怎么卖啊！）；summary 写 Nobody speaks in this shot；detailed_description 写 no dialogue is spoken and nobody's lips move；prompt 里 <d> 块数 = 0。"
     },
     {
       "beat": "B2",
       "channel": "对白",
       "text": "老板：「四十五一斤。」",
       "in_prompt": false,
-      "evidence": "无对应句（WF-09b missing 列表第 2 条）。提示词全文也没有任何报价内容（实测 '45' 与 'forty' 各 0 次）。"
+      "evidence": "无对应句（WF-09b 缺 4 条中的第 2 条）。提示词全文也没有任何报价内容（实测 '45' 与 'forty' 各 0 次）。"
     },
     {
       "beat": "B2",
       "channel": "对白",
       "text": "闫清：「这么贵？」",
       "in_prompt": false,
-      "evidence": "无对应句（WF-09b missing 列表第 3 条）；overall_soundscape 结尾写 No voices.，提示词只给了呼吸声与一次鞋底摩擦声。"
+      "evidence": "无对应句（WF-09b 缺 4 条中的第 3 条）；overall_soundscape 结尾写 No voices.，提示词只给了呼吸声与一次鞋底摩擦声。"
     },
     {
       "beat": "B2",
       "channel": "VO",
       "text": "「我怎么记得，猪肉没这么贵。」",
       "in_prompt": false,
-      "evidence": "无对应句（WF-09b missing 列表第 4 条 = [VO] 我怎么记得，猪肉没这么贵。），也没有任何 off-screen / voice-over 写法（实测 off-screen 0 次、(S1) 0 次）。"
+      "evidence": "无对应句（WF-09b 缺 4 条中的第 4 条 = [VO] 我怎么记得，猪肉没这么贵。），也没有任何 off-screen / voice-over 写法（实测 off-screen 0 次、(S1) 0 次）。"
     }
   ],
   "findings": [
@@ -46,7 +46,7 @@
       "level": "error",
       "code": "WF-09",
       "claim": "B2 的三句对白与一句 VO 全部没进提示词，提示词反而声明本镜无人说话——按这条提示词生成出来必然是默片。",
-      "evidence": "新审计包 17:41:36：WF-09 报 beats_with_dialogue=[B2]；WF-09b 逐条报缺 4 条（老板，这猪肉怎么卖啊！／四十五一斤。／这么贵？／我怎么记得，猪肉没这么贵。），got_d_blocks=0。prompt 实测无 <d> 标记，summary = Nobody speaks in this shot，overall_soundscape = No voices.",
+      "evidence": "审计包 17:44:52：WF-09 报默片（beats_with_dialogue=[B2]）；WF-09b 报「这一镜有 4 条台词/VO 的原文没落进 <d>…</d>」，<d> 块数 = 0。prompt 实测无 <d> 标记，summary = Nobody speaks in this shot，overall_soundscape = No voices.",
       "fix": "按发声顺序编号后照官方写：<Subject 3> (S1) says, <d>[Chinese] 老板，这猪肉怎么卖啊！</d> / <Subject 2> (S2) says, <d>[Chinese] 四十五一斤。</d> / <Subject 3> (S1) replies, <d>[Chinese] 这么贵？</d>；VO 照 h3res/guide_ref_en.md §5.4 用同一 (S1) 并标 off-screen。禁字幕句必须保留（规矩.md §10：<d> 与禁字幕句不是二选一），同时删掉 Nobody speaks / no dialogue is spoken and nobody's lips move / No voices. 三处宣告。"
     },
     {
@@ -62,7 +62,7 @@
       "level": "error",
       "code": "WF-07",
       "claim": "CHR-01（闫清）出场，但跨镜识别锚没写：左眉尾那道陈旧小疤。",
-      "evidence": "audit_rules.json characters.CHR-01.signature = 'a small old scar just above the outer end of his left eyebrow'；prompt 实测 scar 0 次、eyebrow 0 次。项目卡 §待修 已记该疤在 CHR01_head_front_00001_.png 上漂成两颊斑点。",
+      "evidence": "audit_rules.json characters.CHR-01.signature = 'a small old scar just above the outer end of his left eyebrow'；H3 prompt 实测 scar 0 次、eyebrow 0 次（首帧那条同样没有，见 F22）。项目卡 §待修 已记该疤在 CHR01_head_front_00001_.png 上漂成两颊斑点。",
       "fix": "写进 <Subject 3> 定义与 retention_analysis：with a small old scar just above the outer end of his left eyebrow。注意 audit_rules 的 identity_note：正面画面里他的左眉＝画面偏右那道（镜像陷阱）。"
     },
     {
@@ -70,7 +70,7 @@
       "level": "error",
       "code": "WF-07",
       "claim": "CHR-02（摊主）出场，但跨镜识别锚没写：右手虎口那道旧刀痕。",
-      "evidence": "audit_rules.json characters.CHR-02.signature = 'an old knife scar in the web of his right hand'；prompt 实测 knife 0 次、scar 0 次。",
+      "evidence": "audit_rules.json characters.CHR-02.signature = 'an old knife scar in the web of his right hand'；H3 prompt 实测 knife 0 次、scar 0 次（首帧那条同样没有，见 F22）。",
       "fix": "写进 <Subject 2> 定义与 retention_analysis：with an old knife scar in the web of his right hand。"
     },
     {
@@ -78,7 +78,7 @@
       "level": "error",
       "code": "WF-08",
       "claim": "CHR-02（摊主）缺写在正向的否定锁 clean-shaven。",
-      "evidence": "audit_rules.json characters.CHR-02.positive_locks = ['clean-shaven']；prompt 实测 clean-shaven 0 次。项目卡 §本项目的坑 记着第一版摊主写「没有胡须」结果胡子照出（规矩.md §10：CFG 1.0 下负向词完全无效）。",
+      "evidence": "audit_rules.json characters.CHR-02.positive_locks = ['clean-shaven']；H3 prompt 实测 clean-shaven 0 次（首帧那条也没有：FF 提示词里 胡须/胡子/光洁 各 0 次 —— 见 F22）。项目卡 §本项目的坑 记着第一版摊主写「没有胡须」结果胡子照出（规矩.md §10：CFG 1.0 下负向词完全无效）。",
       "fix": "在 <Subject 2> 定义里正向写死 clean-shaven（可再补 his chin and upper lip are smooth and hairless）。"
     },
     {
@@ -94,7 +94,7 @@
       "level": "warn",
       "code": "WF-20",
       "claim": "detailed_description 的 7.29 秒时间轴是照默片排的：0.0–1.5 静止呼吸 / 1.5–3.5 前倾看肉 / 3.5–5.0 直起身偏头 / 5.0–7.3 静止呼吸，B2 的 34 字语音没有任何位置。",
-      "evidence": "新 WF-20（口径已按戏 §三 修正）：镜头 S01 语音密度 85%（34 字 / 7.29s），超过戏 §三 自定的 75% 上限 —— 34/5.5 = 6.18s，装得下，但没有气口。提示词原文 only breathes 出现 3 次，全部 7.29s 都分给了无声动作。",
+      "evidence": "WF-20（口径已按戏 §三 修正）：镜头 S01 语音密度 85%（34 字 / 7.29s），超过戏 §三 自定的 75% 上限 —— 34/5.5 = 6.18s，装得下，但没有气口。提示词原文 only breathes 出现 3 次，全部 7.29s 都分给了无声动作。",
       "fix": "先排声音再排动作：把 3 句对白 + 1 句 VO 按约 6.2 秒摊进 0.3–6.5s，动作只保留能与说话并行的（听、看、皱眉），删掉占满整段的 only breathes 这类静默动作。密度最终值仍须配音实测（戏 §三 自己写明「38 秒不算数」）。"
     },
     {
@@ -109,8 +109,8 @@
       "id": "F9",
       "level": "error",
       "code": "SHOT-02",
-      "claim": "首帧命名漂移：镜头表登记的 mz_ep02sc01_s01_first.png 全盘不存在，真实产物是 outputs/FF_EP02SC01_S01_00001..00006_.png（新的 SHOT-02 已把真名报进 likely_real，但表里的名字和 LoadImage 都还没改）。",
-      "evidence": "新审计包 SHOT-02（S01）likely_real = outputs\\FF_EP02SC01_S01_00001_.png … _00006_.png（还混进了两个 .mp4）；全盘递归搜 mz_*.png 得 0 个；workflows/EP02SC01_S01_h3.json node 6 widgets_values[0] = mz_ep02sc01_s01_first.png（与表里的错名一致，所以 WF-16 仍然因为「两边都错」而静默通过）；workflows/FF_EP02SC01_shot.json node 10 SaveImage 前缀 = meishi/FF_EP02SC01_S04。",
+      "claim": "首帧命名漂移：镜头表登记的 mz_ep02sc01_s01_first.png 全盘不存在，真实产物是 outputs/FF_EP02SC01_S01_00001..00006_.png（SHOT-02 已把真名报进 likely_real，但表里的名字和 LoadImage 都还没改）。",
+      "evidence": "审计包 SHOT-02（S01）likely_real = outputs\\FF_EP02SC01_S01_00001_.png … _00006_.png（前面还混着两个 .mp4，见 F19）；全盘递归搜 mz_*.png 得 0 个；workflows/EP02SC01_S01_h3.json node 6 widgets_values[0] = mz_ep02sc01_s01_first.png（与表里的错名一致，所以 WF-16 仍然因为「两边都错」而静默通过）；workflows/FF_EP02SC01_shot.json node 10 SaveImage 前缀 = meishi/FF_EP02SC01_S04。",
       "fix": "把镜头表 S01.first_frame 改成真实归档名（建议 FF_EP02SC01_S01_00001_.png 并注明选定理由），同步改 EP02SC01_S01_h3.json 的 LoadImage；四镜各自登记自己的首帧名，并把选定那张复制进 assets/（SHOT-02 的 fix 原文要求归档）。"
     },
     {
@@ -126,7 +126,7 @@
       "level": "error",
       "code": "SHOT-05",
       "claim": "画风句吊在描述段最末尾（第 668 字处，描述段共 793 字）—— WF-03 报的那条，已核实。",
-      "evidence": "FF_EP02SC01_shot.json node 5 共 7 段（去空白字符数）：景别 59 / 场景 235 / 闫清 142 / 摊主 161 / 光与脸 61 / 画风 96 / 无字声明 39；画风段是倒数第二段。审计包 SHOT-05 第 2 条报「第 663 字处」（差 5 字来自 norm_ws 折叠空白，不改变结论）。",
+      "evidence": "FF_EP02SC01_shot.json node 5 共 7 段（去空白字符数）：景别 59 / 场景 235 / 闫清 142 / 摊主 161 / 光与脸 61 / 画风 96 / 无字声明 39；画风段是倒数第二段。审计包 SHOT-05 报「第 663 字处」（差 5 字来自 norm_ws 折叠空白，不改变结论）。",
       "fix": "把画风句提到最前（景别句之后立刻），并把场景 + 人物段压到 500 字以内（占比下限 20% ⇒ 100/0.20 = 500 字）。"
     },
     {
@@ -134,7 +134,7 @@
       "level": "error",
       "code": "SHOT-05",
       "claim": "画风句占比 12.6%，低于 t2i 下限 20% —— WF-04 报的那条，已核实。",
-      "evidence": "审计包 SHOT-05 第 3 条报 100 / 793 = 12.6%，audit_rules.style_ratio_min.t2i = 0.2；即使删掉末尾那段 39 字的「没有…」也只到 100/754 = 13.3%，仍不过。",
+      "evidence": "审计包 SHOT-05 报 100 / 793 = 12.6%，audit_rules.style_ratio_min.t2i = 0.2；即使删掉末尾那段 39 字的「没有…」也只到 100/754 = 13.3%，仍不过。",
       "fix": "要么按 F11 提前并砍字数，要么连同标定样本一起改阈值（pipeline/docs/06_审计闸门.md §五：阈值是提示器不是定律，要改请连样本一起改并写进 audit_rules.json）。"
     },
     {
@@ -157,16 +157,16 @@
       "id": "F15",
       "level": "warn",
       "code": null,
-      "claim": "首帧横幅上有中文字（我读到的是「吴帝…」，不是项目卡记的「生鲜猪肉」），而 H3 提示词声明全片无屏上文字；FF 首帧提示词末尾那串「没有招牌、没有价签文字…」在 CFG 1.0 下无效——新的 WF-22 能抓这条，但它抓的那条结果进不了本审计包（见 F21）。",
-      "evidence": "outputs/FF_EP02SC01_S01_00001_.png 在 x 560–980 / y 0–60 放大 5× 的裁片里，红横幅上有 2–3 个汉字（首二字近「吴」「帝」）；FF_EP02SC01_shot.json node 5 末段 39 字写「画面里是干净的无字画面：没有招牌、没有价签文字、没有水印、没有台标、没有字幕。」（我手工按 WF-22 的判据跑：没有×5、无字×1 → 会对 FF 报 WARN）；packet.prompt 写 No subtitles, captions or on-screen text appear at any point。规矩.md §10：Qwen-Image 在 CFG 1.0 下负向词完全无效，画面可见文字要用英文双引号逐个列出。",
-      "fix": "两件事分开做：(1) 先定横幅要不要字——要，就在提示词里用英文双引号写出确切字样，并让带字画面走 edit 链保住参考图已有的字（项目卡 §待修 10 的结论），不要走 t2i 凭空造字；(2) 删掉那串「没有…」否定枚举，改写成正向说法。"
+      "claim": "首帧横幅上有中文字（我读到的是「吴帝…」，不是项目卡记的「生鲜猪肉」），而 H3 提示词声明全片无屏上文字；FF 首帧提示词末尾那 39 字否定枚举在 CFG 1.0 下无效，而且它与同一段里「台面上插着几只小黄色价签」自相矛盾。程序这一轮把它当作 SHOT-05 的 [WF-22] 报成 ERROR，我维持 warn —— 理由见 claim 后半：这条一半依赖我对横幅文字的目视读数，且 WF-22 本身按设计是 WARN（另见 F24 的级别膨胀问题）。事实部分我核过，不豁免。",
+      "evidence": "outputs/FF_EP02SC01_S01_00001_.png 在 x 560–980 / y 0–60 放大 5× 的裁片里，红横幅上有 2–3 个汉字（首二字近「吴」「帝」）；FF_EP02SC01_shot.json node 5 末段 39 字写「画面里是干净的无字画面：没有招牌、没有价签文字、没有水印、没有台标、没有字幕。」，而场景段又要求「几只插着的小黄色价签」；审计包 SHOT-05 新增第 4 条 = [WF-22] 正向提示词里出现否定枚举 ['没有', '无字']（共 6 处）；packet.prompt 写 No subtitles, captions or on-screen text appear at any point。规矩.md §10：Qwen-Image 在 CFG 1.0 下负向词完全无效，画面可见文字要用英文双引号逐个列出。",
+      "fix": "两件事分开做：(1) 先定横幅要不要字——要，就在提示词里用英文双引号写出确切字样，并让带字画面走 edit 链保住参考图已有的字（项目卡 §待修 10 的结论），不要走 t2i 凭空造字；(2) 删掉那串「没有…」否定枚举，改成正向说法（例如 clean tiled surfaces with no lettering 这种正向短语，或干脆不写）。"
     },
     {
       "id": "F16",
       "level": "error",
       "code": "WF-19",
-      "claim": "H3 提示词里那句英文画风锁定句不是项目卡原文，而是 audit_rules.json 自己加的一条「本项目登记」；H3 的画风闸门现在拿一句没人拍板的话在核对。（上一轮我把它记成 warn，本轮程序已按 WF-19 落成 ERROR，故升级为 error 与程序对齐。）",
-      "evidence": "审计包 WF-19：画风锁「画面锁定句①英文（H3 用，本项目登记）」在 项目卡.md 里找不到逐字出处；audit_rules.json _style_locks_about 自认「项目卡里原本没有英文版 …… ⚠️ 这一条待用户在项目卡里确认（我加的）」。与项目卡 §画风锁定句① 中文对比，英文句还丢了「画面中的」「原神那一类」「头发成束块面化」三项。",
+      "claim": "H3 提示词里那句英文画风锁定句不是项目卡原文，而是 audit_rules.json 自己加的一条「本项目登记」；H3 的画风闸门现在拿一句没人拍板的话在核对。",
+      "evidence": "审计包 chain 段 WF-19（你这一轮已把它从「每条工作流各报一次」挪到链层只报一次，我上一轮提的作用域问题因此消解）：画风锁「画面锁定句①英文（H3 用，本项目登记）」在 项目卡.md 里找不到逐字出处；audit_rules.json _style_locks_about 自认「项目卡里原本没有英文版 …… ⚠️ 这一条待用户在项目卡里确认（我加的）」。与项目卡 §画风锁定句① 中文对比，英文句还丢了「画面中的」「原神那一类」「头发成束块面化」三项。",
       "fix": "要么请用户在 项目卡.md 补一条逐字的英文锁定句，要么把中文句当唯一权威、H3 用它的译法并在 audit_rules 里登记中文出处。"
     },
     {
@@ -189,25 +189,33 @@
       "id": "F19",
       "level": "info",
       "code": "SHOT-02",
-      "claim": "新增的 SHOT-02 likely_real 字段把 .mp4 也当成候选首帧列了出来——它想找的是「首帧图」，混进成片视频会误导改名。",
-      "evidence": "审计包 SHOT-02（S01）likely_real = outputs\\EP02SC01_S01_00001_.mp4 | outputs\\EP02SC01_S01_00002_.mp4 | outputs\\FF_EP02SC01_S01_00001_.png | …（S02/S03/S04 同样各自混进 1–2 个 .mp4）。",
+      "claim": "SHOT-02 的 likely_real 字段把 .mp4 也当成候选首帧列了出来——它想找的是「首帧图」，混进成片视频会误导改名。这一轮仍在。",
+      "evidence": "审计包 SHOT-02（S01）likely_real = outputs\\EP02SC01_S01_00001_.mp4 | outputs\\EP02SC01_S01_00002_.mp4 | outputs\\FF_EP02SC01_S01_00001_.png | …（S02 混 1 个、S03 混 2 个、S04 混 1 个 .mp4）。",
       "fix": "glob 后按后缀过滤（.png/.jpg/.jpeg/.webp），或把 .mp4 单独放进一个 video_outputs 字段；本镜真名就是 FF_EP02SC01_S01_00001..00006_.png（见 F9）。"
     },
     {
-      "id": "F20",
-      "level": "info",
-      "code": "WF-19",
-      "claim": "WF-19 不判「这条提示词到底用了哪条锁」，而是对 style_locks 里每一项都报同一条 ERROR —— 对本项目任何工作流（包括只用中文锁的 t2i）都会报「英文锁没有出处」。对 S01 这条报得对，但如果直接审画风探针/首帧工作流，它会把项目级的登记问题算成那条工作流的错。",
-      "evidence": "pipeline_audit.py 619-630：for nm, txt in locks.items(): if txt and norm_ws(txt) not in card_txt: rep.error('WF-19', ...) —— 循环里没有出现 prompt，也没有 is_shot_wf 门（对比 line 645 的 WF-05 有 if is_shot_wf）；且 check_chain 只把 WF-02/03/04 传播成 SHOT-05，所以这条在镜头包里只以 S01 自己那份出现。",
-      "fix": "要么加一句「这条锁是否真的出现在本 prompt 里」（norm_ws(txt) in norm_ws(prompt)）再报，要么把它降级成 chain 层的项目级 ERROR 报一次；现在这样会在 preflight 任一条 t2i 时重复报同一条。"
+      "id": "F22",
+      "level": "error",
+      "code": "SHOT-05",
+      "claim": "【本轮新报出来的真问题】首帧提示词里也没有两个签名标记、也没有 clean-shaven —— 身份锚从来没有进过首帧。这比 H3 提示词缺锚更硬：**首帧才是把脸和身份烙进成片的那一步**，H3 只是从首帧续下去。",
+      "evidence": "审计包 SHOT-05 新增 3 条（你这一轮把传播从 WF-02/03/04 扩到 WF-07/08/22 之后才看得见）：[WF-07] CHR-01 签名标记没写、[WF-07] CHR-02 签名标记没写、[WF-08] CHR-02 缺 clean-shaven。我手工核 workflows/FF_EP02SC01_shot.json node 5 正文：疤 0 次、刀痕 0 次、虎口 0 次、眉 0 次、光洁 0 次、胡须/胡子 0 次（「干净」2 次是「干净清爽的构图」和「干净的无字画面」，与剃须无关）。而项目卡 §角色锚点的设计规格 与 audit_rules characters 都写明这两个标记是跨镜识别锚。",
+      "fix": "在 FF_EP02SC01_shot.json 的两个人物段里补：闫清 with a small old scar just above the outer end of his left eyebrow（中方措辞：左眉尾一道很浅的陈旧小疤）；摊主 with an old knife scar in the web of his right hand + clean-shaven（中方措辞：右手虎口一道旧刀痕／下巴与上唇的皮肤光洁干净）。**补完必须重出首帧**：现在的四张首帧上这两个锚都没有，按 §6.4「生成后逐张核验标志特征」这四张本来就该重出。"
     },
     {
-      "id": "F21",
+      "id": "F23",
+      "level": "error",
+      "code": "SHOT-01",
+      "claim": "镜头 S02 缺字段 workflow —— 工作流文件被反复改写覆盖掉了，S02 的提示词已经无处可寻。这不是「少填一列」，是这一镜的提示词已经丢了。",
+      "evidence": "审计包 SHOT-01：镜头 S02 缺字段 `workflow`；storyboard/SCN01_镜头表.json S02 的 workflow = null，其 known_gap 写明「S02 的工作流文件已被覆盖，盘上不存在」；prompts/ 下只有 S01/S03/S04 三份归档（S02.prompt.md 不存在）。",
+      "fix": "照 SHOT-06 的方向一镜一条工作流；S02 的提示词只能从成片/首帧反推重写，并在重写后立刻 sync-prompts 归档。登记字段本身也要补上。"
+    },
+    {
+      "id": "F24",
       "level": "info",
-      "code": "WF-22",
-      "claim": "WF-22（否定枚举）的结果传播不到镜头审计包里：check_chain 只把 WF-02/03/04 传播成 SHOT-05，所以首帧工作流 FF_EP02SC01_shot 的 WF-22 WARN（没有×5、无字×1）在 S01 的审计包里完全看不见——我上一轮报的「首帧提示词末尾否定枚举」这条，虽然检查器已经写出来了，本次审计仍然没有留痕。",
-      "evidence": "pipeline_audit.py check_chain 的传播循环只匹配 (\"WF-02\", \"WF-03\", \"WF-04\")；新审计包 chain 段里没有 WF-19/WF-22 的任何条目，而 FF_EP02SC01_shot 的 node 5 末段确定性含 5 处「没有」（我按 WF-22 判据手工跑过）。",
-      "fix": "把传播白名单扩到「首帧工作流的所有 ERROR/WARN」，至少在 SHOT-05 里加一条聚合（例如：首帧工作流另有 N 条 ERROR / M 条 WARN，见 <工作流名> 的 preflight）。否则画风闸门以外的首帧问题永远只在单独审那条工作流时才看得见。"
+      "code": "SHOT-05",
+      "claim": "传播会把子检查的 WARN 升级成 ERROR，并且统一挂在「首帧画风闸门不过」这句名下：WF-22 本来是 WARN（它的 fix 是「登记白名单」这种可判断项），包进 SHOT-05 后变成拦提交的 ERROR，措辞也与画风无关。规则上不算误报，但级别和归因都串了。",
+      "evidence": "pipeline_audit.py check_chain 的传播循环对新扩进来的条目一律 rep.error(\"SHOT-05\", ...)（本轮 SHOT-05 从 3 条涨到 7 条，其中 [WF-22]、[WF-07]×2、[WF-08] 都不是画风问题）；而 check_workflow 里 WF-22 自己用的是 rep.warn。",
+      "fix": "传播时沿用子条目的 level（WARN 就传 WARN），并给非画风类条目换一个聚合码（例如 SHOT-08「首帧工作流自身不变量不过」），别让「画风闸门」这句名不副实。这个改动不影响本镜结论——本镜这几条本来就都是真问题。"
     }
   ],
   "missing_checks": [
@@ -234,16 +242,8 @@
         "input": "H3 节点的参考输入（ref_images / ref_videos / ref_audios）＋ prompt 的 retention_analysis",
         "rule": "ERROR 当输入里含音轨而 retention_analysis 没有 fully_copy / reference 标记；ERROR 当标了 fully_copy 却没有对应 <Audio N> 定义。"
       }
-    },
-    {
-      "claim": "子检查的结果没有统一的向上传播规则（F21 的成因）：check_chain 用硬编码白名单只传播 WF-02/03/04，凡是不在这个名单里的新检查（WF-19 / WF-22 / WF-18…）在首帧工作流上跑出来的结果，都不会出现在镜头审计包里，也就进不了封条绑定的那份证据。",
-      "proposed_check": {
-        "code": "CHAIN-03",
-        "input": "check_chain 里对每条 first_frame_workflow 调 check_workflow 得到的子报告 items",
-        "rule": "当子报告里有任何未传播的条目时，在链层留一条聚合记录（子工作流名 + 各等级条数 + 逐条 code），保证「首帧工作流报过什么」在这条镜头的审计包里可查；不做白名单，免得下次新增检查又漏掉。"
-      }
     }
   ],
-  "blocking": ["F1", "F2", "F3", "F4", "F5", "F6", "F8", "F9", "F10", "F11", "F12", "F13", "F16", "F18"],
+  "blocking": ["F1", "F2", "F3", "F4", "F5", "F6", "F8", "F9", "F10", "F11", "F12", "F13", "F16", "F18", "F22", "F23"],
   "waivers": []
 }
