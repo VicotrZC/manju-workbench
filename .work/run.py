@@ -36,14 +36,43 @@ PY = ROOT / ".work" / "venv" / "Scripts" / "python.exe"
 FFMPEG = ROOT / "tools" / "ffmpeg.exe"
 
 
+class ConfigMissing(Exception):
+    """缺配置文件 —— 这是**操作员的步骤没做完**，不是脚本坏了。"""
+
+
 def ssh_client():
+    """连远端。缺配置时给**人话**，不要抛裸 Traceback。
+
+    2026-09-20：冷克隆实测，没放 ssh_pass.txt 时这里直接冒 Python Traceback，
+    新窗口看到会以为工具链坏了，而不是"我漏了一步"。这条路径值得一个明确的提示。
+    """
     import paramiko
-    host, port = (ROOT / "ssh" / "server.txt").read_text(encoding="utf-8").split()[:2]
-    pw = (ROOT / "ssh_pass.txt").read_text(encoding="utf-8").strip()
+    srv = ROOT / "ssh" / "server.txt"
+    pwf = ROOT / "ssh_pass.txt"
+    if not srv.exists():
+        raise ConfigMissing(
+            "缺 ssh/server.txt（应为一行：<主机> <端口>）。\n"
+            "  这个文件应当随仓库一起来；没有说明克隆不完整。")
+    if not pwf.exists():
+        raise ConfigMissing(
+            "缺 ssh_pass.txt —— 服务器密码。\n"
+            "  **它永远不入库**（.gitignore 第 2 行），每台新电脑/新克隆都要手动放一次：\n"
+            "      把密码单独一行写进 %s\n"
+            "  不要提交它、不要打印它、不要写进日志。" % pwf)
+    host, port = srv.read_text(encoding="utf-8").split()[:2]
+    pw = pwf.read_text(encoding="utf-8").strip()
+    if not pw:
+        raise ConfigMissing("ssh_pass.txt 是空的：%s" % pwf)
     c = paramiko.SSHClient()
     c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    c.connect(host, port=int(port), username="root", password=pw, timeout=25,
-              allow_agent=False, look_for_keys=False)
+    try:
+        c.connect(host, port=int(port), username="root", password=pw, timeout=25,
+                  allow_agent=False, look_for_keys=False)
+    except Exception as exc:
+        raise ConfigMissing(
+            "连不上 %s:%s —— %s: %s\n"
+            "  先确认云机开着（未经用户同意不要自行开机），再核对 ssh/server.txt 里的地址端口。"
+            % (host, port, type(exc).__name__, exc))
     return c, host, port
 
 
@@ -297,4 +326,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except ConfigMissing as exc:
+        # 配置缺失是**操作步骤没做完**，不是脚本 bug —— 打成提示，不打栈。
+        print("\n[配置缺失] %s\n" % exc, file=sys.stderr)
+        sys.exit(3)
+    except KeyboardInterrupt:
+        sys.exit(130)

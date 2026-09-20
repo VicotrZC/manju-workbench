@@ -104,7 +104,29 @@ def stop() -> int:
     return 0
 
 
+def preflight() -> int:
+    """起隧道之前先确认配置齐了。
+
+    2026-09-20：缺 ssh_pass.txt 时，隧道本体在 connect() 里抛 FileNotFoundError，
+    被它自己的重连循环吞掉，每 5 秒重试一次、只写进 tunnel.log —— 表现出来是
+    "起了但 30 秒没就绪"，看不出真正原因。这里提前拦住，给一句人话。
+    """
+    if not (ROOT / "ssh" / "server.txt").exists():
+        print("❌ 缺 ssh/server.txt（一行：<主机> <端口>）—— 克隆不完整")
+        return 3
+    pwf = ROOT / "ssh_pass.txt"
+    if not pwf.exists() or not pwf.read_text(encoding="utf-8").strip():
+        print("❌ 缺 ssh_pass.txt —— 服务器密码。**它永远不入库**，每台新电脑都要手动放一次：")
+        print("     把密码单独一行写进 %s" % pwf)
+        print("   然后重跑本脚本。不要提交它、不要打印它。")
+        return 3
+    return 0
+
+
 def start() -> int:
+    rc = preflight()
+    if rc:
+        return rc
     got = http_ok(timeout=4)
     if got:
         print("隧道已在且穿透正常（ComfyUI %s，显存空闲 %.1f GB），不重复启动" % (got[0], got[1]))
