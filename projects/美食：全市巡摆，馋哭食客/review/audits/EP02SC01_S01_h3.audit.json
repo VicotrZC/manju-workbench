@@ -285,11 +285,11 @@
     "script/EP02_SC01_菜市场买肉_戏.md": "67d6caf615404cb8e7ff181c80f8a1d3010f229e7a001c532c84bb4f5692fe16",
     "storyboard/SCN01_镜头表.json": "17a0a8447b7e194c4a64f29d0c58b1eb19b2b4c514875b80bac624828e3038c4",
     "storyboard/SCN01_GEO空间地图.md": "718a287bf3effcc6659d929418c57a567c6808699f36b611ddb9bb74f246d721",
-    "audit_rules.json": "31e704f5b8914ab50721716b46c7b35dcc89fb179c156dc6c13a76a4f1457262",
+    "audit_rules.json": "75507a23b005ac47df9b6975b7779c573cb91214f0937cc3752eddce229f8a59",
     "workflows/FF_EP02SC01_shot.json": "e10017866c2e3a3edb430d919ba59fb1e1a2e792723e362789f43b4e28283dd3",
     "prompts\\S01.prompt.md": "714e52854a3b21aa9790330751c0f77eeb67720a8257c399f24839e7c5c9f55c"
   },
-  "sealed_at": "2026-09-20T17:52:31",
+  "sealed_at": "2026-09-20T17:54:07",
   "sealed_by": "tools/pipeline_audit.py seal",
   "packet": ".work\\audit\\packets\\美食：全市巡摆，馋哭食客.EP02SC01_S01_h3.packet.json",
   "mechanical_at_seal": {
