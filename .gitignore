@@ -1,0 +1,98 @@
+# 密钥：永不提交（仓库 README 第八条早有约定）
+ssh_pass.txt
+*.pem
+*.key
+.env
+.env.*
+
+# 模型权重（约 64 GB，可从 HuggingFace 重新下载）
+models/
+diffusion_models/
+text_encoders/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.gguf
+*.onnx
+
+# 本地二进制工具（ffmpeg.exe 约 62 MB / Linux 静态版 ffmpeg）
+tools/*.exe
+tools/*.dll
+tools/ffmpeg
+tools/ffprobe
+
+# 渲染产物：图片（控制帧 / 参考图 / 抽帧，约 5.2 GB）
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+# 但 **skill 自带的示例图/资源属于 skill 本体**，要进库 —— 否则 clone 下来 skill 是残的
+!/.zcode/skills/**/*.png
+!/.zcode/skills/**/*.jpg
+!/.zcode/skills/**/*.jpeg
+!/.zcode/skills/**/*.webp
+*.tif
+*.tiff
+*.exr
+
+# 渲染产物：音视频
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+
+# 用户明确要求随仓库迁移的参考片；其他生成视频仍不提交
+!/references/videos/mmexport1789479809107.mp4
+
+# 抓回来的原始网页（raw/ 与 research/_raw 合计约 560 MB，只留抽出的 .txt）
+*.html
+research/_raw/
+research/_articles/
+
+# 中间产物：.work/ 里只有 .py / .json / .txt 是源，其余是产物
+.work/*
+!.work/*.py
+!.work/*.json
+!.work/*.txt
+.work_ep01/
+tmp/
+.temp/
+
+# 工具缓存
+# ⚠️ .zcode/ 里**混着两种东西**：agent 工具的本地配置（不该进库）和 .zcode/skills/（**必须进库**）。
+#    原来写的是 `.zcode/` 一刀切忽略，导致 skills 只能靠 `git add -f` 强塞 ——
+#    后果是**以后往 skills 里加新文件会被静默忽略**（2026-09-20 发现）。
+#    正确写法：忽略 .zcode 的内容，但把 skills 目录重新纳入。
+.zcode/*
+!.zcode/skills
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+
+# 制作台运行时数据（检查证据可重跑，不入 git；签收在 pipeline/workbench/signoffs.json 进 git）
+pipeline/workbench/data/
+
+# 抽帧暂存
+_crop/
+shots/_crops/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.orig
+*.rej

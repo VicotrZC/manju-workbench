@@ -1,0 +1,3 @@
+# 通用工具的第三方依赖。尽量保持最小。
+# 实测：.work/ 下的通用工具里，只有 run.py 需要 paramiko（远程 SSH/SFTP），其余全是标准库。
+paramiko>=3.0
