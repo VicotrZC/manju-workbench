@@ -1,0 +1,73 @@
+{
+  "_about": [
+    "本项目的**审计锁定件**。tools/pipeline_audit.py 只读它，不读散文。",
+    "规矩 §9：本文件不转述规矩，只登记**这个项目自己的**锁定值。",
+    "任何一条改了，买肉场所有审计封条立即过期（封条绑 sha256）。"
+  ],
+  "slug": "meishi",
+
+  "script": "script/EP02_SC01_菜市场买肉_戏.md",
+  "shot_table": "storyboard/SCN01_镜头表.json",
+  "geo_file": "storyboard/SCN01_GEO空间地图.md",
+
+  "canvas": [1376, 768],
+
+  "_style_locks_about": [
+    "① 中文句逐字搬自 项目卡.md §画风锁定句（2026-09-20 用户选定候选 I）。",
+    "② 英文句是本程序登记的 H3 版 —— **项目卡里原本没有英文版**，",
+    "   而四镜的 H3 提示词里用的是英文。若不登记英文版，WF-02 无从核对。",
+    "   ⚠️ 这一条**待用户在项目卡里确认**（我加的，不是原本就有的）。"
+  ],
+  "style_locks": {
+    "画面锁定句①中文（t2i 用）": "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。",
+    "画面锁定句①英文（H3 用，本项目登记）": "The target video is a stylised 3D animated series look: cel-flat shading layered with volumetric light, clear transparent air, saturated but not harsh colours and a clean simple composition; the characters are rendered in a cartoon style with crisp outlines, layered shadows and finely drawn features."
+  },
+
+  "_style_ratio_about": [
+    "实测标定（2026-09-21）：",
+    "  STYLE_I 探针 366 字，画风句占 33% → 画风生效 ✅",
+    "  FF_EP02SC01_shot 805 字，画风句吊在最后占 9% → 画风失效 ❌（出图是写实）",
+    "  FF_EP02SC01_C_guochuang_t2i 也是 t2i、也带画风句，**一样失效** ——",
+    "  所以病根是**占比与位置**，不是 t2i/edit。之前记的教训记错了。",
+    "H3 的 detailed_description 天然长（要装 GEO 块），下限单独给。"
+  ],
+  "style_ratio_min": { "t2i": 0.2, "h3": 0.06 },
+
+  "axis_sentence": "THE CAMERA STAYS ON SIDE A AT ALL TIMES AND NEVER CROSSES THE AXIS",
+
+  "_characters_about": [
+    "`match` = 提示词里怎么称呼他（提示词不写内部编号）。",
+    "`signature` = 01_资产规范 §1.3 的签名标记，必须逐镜写。",
+    "`positive_locks` = **必须写在正向的否定锁** —— 规矩 §10：CFG 1.0 下负向词无效。"
+  ],
+  "characters": {
+    "CHR-01": {
+      "name": "闫清",
+      "match": ["the young customer", "the young man", "闫清"],
+      "signature": "a small old scar just above the outer end of his left eyebrow",
+      "identity_note": "正面画面里他的左眉＝画面偏右那道（镜像陷阱）",
+      "files": [
+        "CHR/CHR01_body_neutral_00004__nohead.png",
+        "CHR/CHR01_body_back_full_00001__nohead.png"
+      ]
+    },
+    "CHR-02": {
+      "name": "摊主",
+      "match": ["the butcher", "老板"],
+      "signature": "an old knife scar in the web of his right hand",
+      "positive_locks": ["clean-shaven"],
+      "identity_note": "用户 2026-09-21 拍板：敦厚老实，**不要胡子**",
+      "files": [
+        "CHR/CHR02_butcher_body_neutral_00009__nohead.png",
+        "CHR/CHR02_body_back_full_00001__nohead.png"
+      ]
+    }
+  },
+
+  "scenes": {
+    "SCN-01": {
+      "name": "凌晨猪肉摊",
+      "files": ["SCN/SCN-01_plan.png", "SCN/SCN-01_cams.png"]
+    }
+  }
+}

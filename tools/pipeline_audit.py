@@ -1,0 +1,1007 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""流程审计闸门 —— **唯一审计入口**（规矩.md §7）。
+
+    python tools/pipeline_audit.py chain      <项目>                 # 层链 + 节拍覆盖
+    python tools/pipeline_audit.py preflight  <项目> <工作流名>       # 机械不变量 + 出审计包
+    python tools/pipeline_audit.py packet     <项目> <工作流名>       # 打印给子 agent 的简报
+    python tools/pipeline_audit.py seal       <项目> <主题> <判定.json>  # 校验并封存 agent 判定
+    python tools/pipeline_audit.py verify     <项目> <工作流名>       # 提交前硬闸门（run.py 调它）
+    python tools/pipeline_audit.py postflight <项目>                 # 项目完成后的流程审计包
+    python tools/pipeline_audit.py status     <项目>
+
+## 为什么要有这个文件
+
+2026-09-21 买肉场成片整体跑偏（写实画风 / 全片无人说话 / 开场"骑车赶到菜市"整拍丢失 /
+GEO 空间地图没有逐字进提示词）。**这些没有一条是"生成失败"，全部是"上游文本没有落到提示词里"，
+而当时没有任何程序在看这件事。** 所以本文件把「戏 → 分镜 → 提示词」的对应关系做成可复现的检查。
+
+## 两道 agent 闸门（规矩 §7 子 agent 监督协议）
+
+| 闸门 | 时机 | 干什么 |
+|---|---|---|
+| **preflight** | **每一次生成之前**（生图 / 生视频都算） | 子 agent 读「戏 ＋ 分镜表 ＋ GEO ＋ 工作流提示词」，逐拍判"这一拍到底进没进这条提示词" |
+| **postflight** | **一个项目/一场做完之后** | 子 agent 审**流程本身**：哪一步没拦住、要新增哪条检查 |
+
+**子 agent 做算力闸门，不做审美裁判**（规矩 §7 原话）。画风好不好看、脸像不像，仍然只有用户能判。
+
+## 封条机制（为什么 agent 的判定不会被绕过）
+
+1. `preflight` 产出**审计包** `.work/audit/packets/<主题>.packet.json`
+2. 子 agent 据此写判定 JSON
+3. `seal` **由本程序**把被审文件的 `sha256` 写进封条 → `review/audits/<主题>.audit.json`
+4. `run.py` 提交前调 `verify`：封条缺失 / 过期（被审文件变了）/ 判定 fail / 机械 ERROR 未被豁免
+   → **拒绝提交**
+
+**改了提示词就必须重新审** —— 这不是靠自觉，是靠哈希。
+
+## 边界（规矩 12）
+
+**本程序报"通过" ≠ 内容合格。** 它只回答"文本有没有落到提示词里"，
+不回答"好不好看"。所有会误报的检查都先在已知样本上跑过（规矩 14）。
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import io
+import json
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+# ── 路径：一律从 __file__ 往上推，不写死盘符（规矩 §0）──────────────────
+ROOT = Path(__file__).resolve().parents[1]
+PACKET_DIR = ROOT / ".work" / "audit" / "packets"
+
+# ── H3 六段式：顺序固定（h3res/guide_ref_en.md）────────────────────────
+H3_FIELDS = ["subject_definitions", "summary", "retention_analysis",
+             "detailed_description", "overall_soundscape", "non_diegetic_music"]
+
+NO_SUB_STEM = "No subtitles, captions or on-screen text appear at any point"
+
+# 提示词里出现这些 = 声明本镜无人说话
+NO_SPEECH_RE = re.compile(
+    r"no dialogue|nobody speaks|nobody'?s lips move|no one speaks|no voices|is silent",
+    re.I)
+# 宣告有台词的官方写法（规矩 §9：<d> 与禁字幕句**不是二选一**）
+SPEECH_TAG_RE = re.compile(r"<d>\s*\[")
+
+H3_GRID = 17          # 帧数必须落在 17k+5
+H3_SHORT_SIDE = 768   # H3 画布短边
+
+
+class Report:
+    """一份检查结果。**ERROR 才拦提交**，WARN 只提示。"""
+
+    def __init__(self, title: str):
+        self.title = title
+        self.items: list[dict] = []
+
+    def add(self, level: str, code: str, msg: str, **extra):
+        self.items.append({"level": level, "code": code, "msg": msg, **extra})
+
+    def error(self, code, msg, **extra):
+        self.add("ERROR", code, msg, **extra)
+
+    def warn(self, code, msg, **extra):
+        self.add("WARN", code, msg, **extra)
+
+    def info(self, code, msg, **extra):
+        self.add("INFO", code, msg, **extra)
+
+    @property
+    def errors(self) -> list[dict]:
+        return [i for i in self.items if i["level"] == "ERROR"]
+
+    @property
+    def warns(self) -> list[dict]:
+        return [i for i in self.items if i["level"] == "WARN"]
+
+    def ok(self) -> bool:
+        return not self.errors
+
+    def dump(self) -> dict:
+        return {"title": self.title, "ok": self.ok(),
+                "errors": self.errors, "warns": self.warns,
+                "items": self.items}
+
+    def print(self):
+        mark = "✅" if self.ok() else "⛔"
+        print(f"\n{mark} {self.title} —— ERROR {len(self.errors)} ／ WARN {len(self.warns)}")
+        for i in self.items:
+            if i["level"] == "INFO":
+                continue
+            tag = "❌" if i["level"] == "ERROR" else "⚠️ "
+            print(f"  {tag} [{i['code']}] {i['msg']}")
+            for k, v in i.items():
+                if k not in ("level", "code", "msg"):
+                    print(f"        {k}: {v}")
+
+
+# ── 小工具 ─────────────────────────────────────────────────────────────
+def sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+def read(p: Path) -> str:
+    return p.read_text(encoding="utf-8", errors="replace")
+
+
+def norm_ws(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip()
+
+
+def noscript_chars(s: str) -> int:
+    """算占比时的字符数：去掉所有空白。"""
+    return len(re.sub(r"\s+", "", s or ""))
+
+
+def image_size(p: Path):
+    """PNG / JPEG 的像素尺寸。读不出来返回 None（不猜）。"""
+    try:
+        b = p.read_bytes()[:65536]
+    except OSError:
+        return None
+    if b[:8] == b"\x89PNG\r\n\x1a\n" and b[12:16] == b"IHDR":
+        return (int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big"))
+    if b[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(b):
+            if b[i] != 0xFF:
+                i += 1
+                continue
+            m = b[i + 1]
+            if m in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+                     0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                return (int.from_bytes(b[i + 7:i + 9], "big"),
+                        int.from_bytes(b[i + 5:i + 7], "big"))
+            if m in (0xD8, 0xD9) or 0xD0 <= m <= 0xD7:
+                i += 2
+                continue
+            i += 2 + int.from_bytes(b[i + 2:i + 4], "big")
+    return None
+
+
+def project_dir(name: str) -> Path:
+    root = ROOT / "projects"
+    d = root / name
+    if d.is_dir():
+        return d
+    for card in sorted(root.glob("*/项目卡.md")):
+        m = re.search(r"^\s*slug\s*[:：]\s*(\S+)", read(card), re.MULTILINE)
+        if m and m.group(1) == name:
+            return card.parent
+    avail = sorted(p.name for p in root.iterdir() if p.is_dir())
+    raise SystemExit(f"❌ 没有这个项目（也不是任何项目的 slug）：{name}\n现有项目：{avail}")
+
+
+def load_rules(proj: Path) -> dict:
+    f = proj / "audit_rules.json"
+    if not f.exists():
+        raise SystemExit(
+            f"❌ 缺少 {f.name} —— 审计需要项目自己的锁定件（画风句/签名标记/否定锁）。\n"
+            f"   照 tools/pipeline_audit.py 顶部的 schema 建一份。")
+    return json.loads(read(f))
+
+
+# ── 戏文件解析（剧本层是**唯一**的节拍来源）─────────────────────────────
+BEAT_HDR = re.compile(r"^\*\*\s*(B\d+)\s*[｜|]\s*(.*?)\*\*\s*$")
+CH_ROW = re.compile(r"^\|\s*\*\*(VO|对白|UI|花字|画面)\*\*\s*\|\s*(.*?)\s*\|")
+
+
+def parse_script(path: Path) -> dict:
+    """把 `*_戏.md` 的九拍表解析成机器可读的节拍表。
+
+    **戏是节拍的唯一权威** —— 分镜只能认领，不能新增（pipeline/docs/02 §规则七）。
+    """
+    beats: dict[str, dict] = {}
+    cur = None
+    for line in read(path).splitlines():
+        m = BEAT_HDR.match(line.strip())
+        if m:
+            cur = m.group(1)
+            beats[cur] = {"id": cur, "header": m.group(2).strip(),
+                          "channels": {"VO": [], "对白": [], "UI": [], "花字": [], "画面": []}}
+            continue
+        if cur is None:
+            continue
+        r = CH_ROW.match(line.strip())
+        if r:
+            beats[cur]["channels"][r.group(1)].append(r.group(2).strip())
+    for b in beats.values():
+        b["has_dialogue"] = bool(b["channels"]["对白"])
+        b["has_vo"] = bool(b["channels"]["VO"])
+        b["dialogue_chars"] = sum(len(re.sub(r"\s", "", x))
+                                  for x in b["channels"]["对白"])
+        b["vo_chars"] = sum(len(re.sub(r"\s", "", x)) for x in b["channels"]["VO"])
+    return beats
+
+
+# ── 分镜表（机器可读的镜头表）──────────────────────────────────────────
+SHOT_REQUIRED = ["id", "beats", "shot_size", "lens_mm", "dist_m", "frames",
+                 "first_frame", "framing_en", "workflow"]
+
+
+def on_screen(prompt: str, c: dict) -> bool:
+    """这个角色在不在这条提示词里。**用 `match` 里登记的称呼判**，
+    因为提示词写的是 `<Subject 2>` / `the butcher`，不是内部编号。"""
+    low = prompt.lower()
+    keys = c.get("match") or ([c["name"]] if c.get("name") else [])
+    return any(k and str(k).lower() in low for k in keys)
+
+
+def load_shot_table(proj: Path, rules: dict) -> tuple[dict, Report]:
+    rep = Report("分镜表（镜头表 JSON）")
+    rel = rules.get("shot_table", "storyboard/镜头表.json")
+    f = proj / rel
+    if not f.exists():
+        rep.error("SHOT-00", f"分镜表不存在：{rel}",
+                  fix="分镜层必须先出机器可读的镜头表；没有它，节拍覆盖无法核对")
+        return {"shots": []}, rep
+    tbl = json.loads(read(f))
+    shots = tbl.get("shots") or []
+    if not shots:
+        rep.error("SHOT-00", f"分镜表 {rel} 里没有任何镜头")
+    seen = set()
+    for s in shots:
+        sid = s.get("id", "?")
+        for k in SHOT_REQUIRED:
+            if k not in s or s[k] in (None, "", []):
+                rep.error("SHOT-01", f"镜头 {sid} 缺字段 `{k}`",
+                          fix="01_资产规范/规矩 §1：镜头表必须含机位与取景的机器可读值")
+        if sid in seen:
+            rep.error("SHOT-01", f"镜头号重复：{sid}")
+        seen.add(sid)
+        ff = s.get("first_frame")
+        if ff:
+            cand = [proj / "assets" / ff, proj / "outputs" / ff,
+                    proj / "storyboard" / ff, proj / ff]
+            if not any(c.exists() for c in cand):
+                rep.error("SHOT-02", f"镜头 {sid} 的首帧文件找不到：{ff}",
+                          searched=[str(c.relative_to(proj)) for c in cand],
+                          fix="首帧是资产，必须归档进 assets/ 或 outputs/；"
+                              "否则这一镜不可复现，也无法事后审计")
+        wfn = s.get("workflow")
+        if wfn:
+            wf_file = proj / "workflows" / f"{wfn}.json"
+            if not wf_file.exists():
+                rep.error("SHOT-04",
+                          f"镜头 {sid} 的工作流文件不存在：workflows/{wfn}.json",
+                          fix="**一个镜头一条工作流，不许反复改写同一个文件** —— "
+                              "被覆盖掉的那一镜的提示词就永远无法审计、无法复现了")
+    return tbl, rep
+
+
+# ── GEO 空间地图：英文块必须**逐字**进每条提示词（01_资产规范 §2.3）────
+def geo_block(proj: Path, rules: dict) -> str:
+    rel = rules.get("geo_file")
+    if not rel:
+        return ""
+    f = proj / rel
+    if not f.exists():
+        return ""
+    lines = read(f).splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        if "英文版" in ln:
+            start = i
+            break
+    if start is None:
+        return ""
+    body, fence = [], False
+    for ln in lines[start:]:
+        if ln.strip().startswith("```"):
+            if fence:
+                break
+            fence = True
+            continue
+        if fence:
+            body.append(ln)
+    return "\n".join(body).strip()
+
+
+# ── 工作流读取 ─────────────────────────────────────────────────────────
+def load_workflow(path: Path) -> dict:
+    wf = json.loads(read(path))
+    wf["_links"] = {l[0]: (l[1], l[2]) for l in wf.get("links", [])}
+    wf["_by_id"] = {n["id"]: n for n in wf.get("nodes", [])}
+    return wf
+
+
+def upstream_text(wf: dict, node_id, input_name: str, depth: int = 0) -> str:
+    """顺着顶层 links 往上游找第一个带文本的节点。
+
+    规矩 §8 坑 1：**outputs[].links 普遍为空，判连通性必须用顶层 links。**
+    """
+    if depth > 8 or node_id is None:
+        return ""
+    n = wf["_by_id"].get(node_id)
+    if n is None:
+        return ""
+    if n.get("type") == "CLIPTextEncode":
+        wv = n.get("widgets_values") or []
+        return wv[0] if wv and isinstance(wv[0], str) else ""
+    for inp in n.get("inputs") or []:
+        if inp.get("name") != input_name:
+            continue
+        lid = inp.get("link")
+        if lid is None:
+            continue
+        src = wf["_links"].get(lid)
+        if src:
+            return upstream_text(wf, src[0], "text", depth + 1)
+    # 单输入节点（如 ConditioningZeroOut）
+    for inp in n.get("inputs") or []:
+        lid = inp.get("link")
+        if lid is None:
+            continue
+        src = wf["_links"].get(lid)
+        if src:
+            t = upstream_text(wf, src[0], "text", depth + 1)
+            if t:
+                return t
+    return ""
+
+
+def split_h3_fields(prompt: str):
+    """六段式切分。返回 (fields, order)。"""
+    names = H3_FIELDS
+    marks = []
+    for m in re.finditer(r"(?m)^\s*([a-z_]+)\s*:\s*$", prompt):
+        if m.group(1) in names:
+            marks.append((m.group(1), m.start(), m.end()))
+    fields, order = {}, []
+    for i, (n, _s, e) in enumerate(marks):
+        end = marks[i + 1][1] if i + 1 < len(marks) else len(prompt)
+        fields[n] = prompt[e:end].strip()
+        order.append(n)
+    return fields, order
+
+
+def h3_nodes(wf: dict) -> list[dict]:
+    return [n for n in wf.get("nodes", [])
+            if str(n.get("type", "")).startswith("MiniMaxH3")]
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  第一道：层链 + 节拍覆盖
+# ══════════════════════════════════════════════════════════════════════
+def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
+    rep = Report(f"层链与节拍覆盖 · {proj.name}")
+    rel_script = rules.get("script")
+    if not rel_script or not (proj / rel_script).exists():
+        rep.error("CHAIN-01", f"剧本层文件缺失：{rel_script}", fix="先出戏，再出分镜")
+        return rep, {}
+
+    beats = parse_script(proj / rel_script)
+    rep.info("BEAT-00", f"戏里共 {len(beats)} 个节拍：{'、'.join(beats)}")
+
+    tbl, srep = load_shot_table(proj, rules)
+    rep.items.extend(srep.items)
+    shots = tbl.get("shots") or []
+
+    # ── 节拍覆盖：**这是"骑车赶到菜市整拍丢失"那类事故的唯一防线** ──
+    claimed: dict[str, list[str]] = {b: [] for b in beats}
+    for s in shots:
+        for b in s.get("beats") or []:
+            if b not in beats:
+                rep.error("BEAT-02",
+                          f"镜头 {s.get('id')} 认领了戏里不存在的节拍 {b}",
+                          fix="分镜不许新增剧情决定（pipeline/docs/02 规则七）")
+            else:
+                claimed[b].append(s.get("id"))
+
+    for bid, b in beats.items():
+        if not claimed[bid]:
+            rep.error("BEAT-01",
+                      f"节拍 {bid}「{b['header']}」**没有任何镜头认领** —— 这一拍会整段消失在成片里",
+                      fix="要么补镜头，要么回戏层删掉这一拍；不许默默吞掉")
+
+    # ── 首帧血缘（SHOT-05）：**成片的画风由首帧决定，不由 H3 提示词决定** ──
+    # 2026-09-21 实测：H3 的 detailed_description 里画风句好好地在最前面，
+    # 首帧是写实的 → 成片就是写实的。所以画风闸门必须掐在**出首帧的那条工作流**上。
+    _style_checked: set[str] = set()
+    for s in shots:
+        fw = s.get("first_frame_workflow")
+        if not fw:
+            rep.error("SHOT-05", f"镜头 {s.get('id')} 没登记 `first_frame_workflow`",
+                      fix="首帧是哪条工作流出的一定要写下来，否则画风无从追溯")
+            continue
+        if not (proj / "workflows" / f"{fw}.json").exists():
+            rep.error("SHOT-05", f"镜头 {s.get('id')} 的首帧工作流不存在：{fw}")
+            continue
+        if fw in _style_checked:          # 四镜同源时只报一次，不刷屏
+            continue
+        _style_checked.add(fw)
+        sub, _pk = check_workflow(proj, fw, rules, {"shots": [], "beats": {}})
+        for it in sub.items:
+            if it["code"] in ("WF-02", "WF-03", "WF-04"):
+                rep.error("SHOT-05",
+                          f"首帧画风闸门不过（四镜首帧都出自 {fw}）："
+                          f"[{it['code']}] {it['msg']}",
+                          detail={k: v for k, v in it.items()
+                                  if k not in ("level", "code", "msg")})
+
+    # ── 资产先于分镜（01_资产规范 §〇 铁律：无图不进分镜）──
+    for key in ("characters", "scenes"):
+        for aid, a in (rules.get(key) or {}).items():
+            for f in a.get("files", []):
+                if not (proj / "assets" / f).exists() and not (proj / "outputs" / f).exists():
+                    rep.error("CHAIN-02",
+                              f"资产 {aid}（{a.get('name','')}）的文件不在位：{f}",
+                              fix="无图不进分镜")
+
+    # ── 总时长 ──
+    total = sum(int(s.get("frames") or 0) for s in shots)
+    fps = tbl.get("fps") or 24
+    if total:
+        rep.info("SHOT-03", f"{len(shots)} 镜共 {total} 帧 ＝ {total / fps:.2f} 秒")
+
+    return rep, {"beats": beats, "shots": shots, "fps": fps, "total_frames": total}
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  第二道：单条工作流的机械不变量
+# ══════════════════════════════════════════════════════════════════════
+def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[Report, dict]:
+    rep = Report(f"工作流不变量 · {wf_name}")
+    wf_path = proj / "workflows" / f"{wf_name}.json"
+    if not wf_path.exists():
+        rep.error("WF-00", f"工作流不存在：workflows/{wf_name}.json")
+        return rep, {}
+    wf = load_workflow(wf_path)
+    nodes = wf.get("nodes", [])
+
+    h3 = h3_nodes(wf)
+    lat = [n for n in nodes if n.get("type") in
+           ("EmptySD3LatentImage", "EmptyLatentImage", "EmptyLatentImagePresets")]
+
+    # ── 取正向提示词 ──
+    if h3:
+        prompt = (h3[0].get("widgets_values") or [""])[0] or ""
+        kind = "h3"
+    else:
+        sampler = next((n for n in nodes if n.get("type") in
+                        ("KSampler", "KSamplerAdvanced", "SamplerCustom",
+                         "SamplerCustomAdvanced")), None)
+        prompt = upstream_text(wf, sampler["id"], "positive") if sampler else ""
+        kind = "t2i"
+    if not prompt.strip():
+        rep.error("WF-00", "取不到正向提示词（空）")
+        return rep, {}
+
+    styled = prompt          # 算画风占比的默认范围
+    fields, order = ({}, [])
+
+    # ── WF-01 六段式 ──
+    if kind == "h3":
+        fields, order = split_h3_fields(prompt)
+        missing = [f for f in H3_FIELDS if f not in fields]
+        if missing:
+            rep.error("WF-01", f"H3 六段式缺段：{missing}",
+                      fix="h3res/guide_ref_en.md：六段顺序固定，缺段会被当普通文本")
+        if order and order != [f for f in H3_FIELDS if f in order]:
+            rep.error("WF-01", f"H3 六段式顺序不对：{order}")
+        styled = fields.get("detailed_description", prompt)
+
+    # ── WF-02/03/04 画风锁定句（**买肉场成片的头号病根**）──
+    # 三条互相独立：**是否逐字**、**在不在最前面**、**占比够不够**。
+    # 第 2、3 条即使第 1 条不过也要量 —— 因为"被改写"和"被淹没"是两个病，得分开报。
+    locks = rules.get("style_locks") or {}
+    np_styled = norm_ws(styled)
+    hit_name, pos = None, None
+    for nm, txt in locks.items():
+        if txt and norm_ws(txt) in norm_ws(prompt):
+            hit_name, pos = nm, np_styled.find(norm_ws(txt))
+            break
+    style_len = None
+    if hit_name is None:
+        rep.error("WF-02",
+                  "**画风锁定句没有逐字出现**（项目卡写明「照抄，不许改写」）",
+                  registered=list(locks),
+                  fix="照抄项目卡 §画风锁定句，一个字都不许改")
+        # 退一步：用锁定句的开头当锚点定位，把"位置"和"占比"照样量出来
+        for nm, txt in locks.items():
+            if not txt:
+                continue
+            ntx = norm_ws(txt)
+            for k in (12, 10, 8):
+                i = np_styled.find(ntx[:k])
+                if i >= 0:
+                    hit_name, pos, style_len = nm, i, len(ntx)
+                    break
+            if pos is not None:
+                break
+    else:
+        style_len = len(norm_ws(locks[hit_name]))
+
+    if pos is not None and pos >= 0:
+        if pos > 20:
+            rep.error("WF-03",
+                      f"画风锁定句（{hit_name}）**不在描述段的最前面**"
+                      f"（在第 {pos} 字处，描述段共 {noscript_chars(styled)} 字）",
+                      fix="实测根因：画风句吊在长场景描述最后会被淹没。"
+                          "STYLE_I 探针 366 字里占 33% → 生效；"
+                          "FF_EP02SC01_shot 805 字里占 9% → 不生效")
+        ratio = (style_len or 0) / max(1, noscript_chars(styled))
+        floor = (rules.get("style_ratio_min") or {}).get(kind, 0.0)
+        if ratio < floor:
+            rep.error("WF-04",
+                      f"画风句占比 {ratio:.1%} 低于下限 {floor:.0%}"
+                      f"（{style_len} / {noscript_chars(styled)} 字）",
+                      fix="要么把画风句提前，要么砍场景描述的字数")
+        else:
+            rep.info("WF-04", f"画风句占比 {ratio:.1%}（下限 {floor:.0%}）")
+
+    # ── WF-05 GEO 空间地图必须逐字进 detailed_description（§2.3）──
+    geo = geo_block(proj, rules)
+    if geo:
+        if norm_ws(geo) not in norm_ws(prompt):
+            rep.error("WF-05",
+                      "**GEO 空间地图英文块没有逐字进提示词**（01_资产规范 §2.3 要求一字不改）",
+                      fix="把 storyboard/GEO空间地图.md §二 的整块贴进 detailed_description")
+        else:
+            rep.info("WF-05", "GEO 英文块已逐字锁定")
+    else:
+        rep.warn("WF-05", "audit_rules.json 没登记 geo_file，跨镜几何无从核对")
+
+    # ── WF-06 禁字幕句 ──
+    # 只要求句干在（允许后面追加限定，例如"…other than the video on the phone screen"），
+    # 免得把合法的变体误报成缺失（规矩 §14）。
+    if NO_SUB_STEM not in prompt:
+        rep.error("WF-06", "缺禁字幕句",
+                  expect=NO_SUB_STEM,
+                  fix="规矩 §9：<d> 与禁字幕句**不是二选一**，两个都要有")
+
+    # ── WF-07 签名标记（§1.3 跨镜识别锚）──
+    for cid, c in (rules.get("characters") or {}).items():
+        if not on_screen(prompt, c):
+            continue
+        sig = c.get("signature")
+        if sig and norm_ws(sig).lower() not in norm_ws(prompt).lower():
+            rep.error("WF-07",
+                      f"{cid}（{c.get('name','')}）出场了，但**签名标记没写进提示词**：{sig}",
+                      fix="§1.3：签名标记是跨镜认出同一个人的唯一锚，必须逐镜写")
+
+    # ── WF-08 否定锁必须写在正向（CFG 1.0 负向无效）──
+    for cid, c in (rules.get("characters") or {}).items():
+        if not on_screen(prompt, c):
+            continue
+        for lock in c.get("positive_locks") or []:
+            if norm_ws(lock).lower() not in norm_ws(prompt).lower():
+                rep.error("WF-08",
+                          f"{cid}（{c.get('name','')}）缺正向否定锁：`{lock}`",
+                          fix="规矩 §10：CFG 1.0 下负向词完全无效，"
+                              "「不要什么」必须写进正向")
+
+    # ── WF-09 台词保真（**买肉场成片的第二号病根**）──
+    shot = next((s for s in (chain.get("shots") or [])
+                 if s.get("workflow") == wf_name or s.get("id") == wf_name), None)
+    if shot is not None:
+        beats = chain.get("beats") or {}
+        owned = [b for b in (shot.get("beats") or []) if b in beats]
+        expects_speech = any(beats[b]["has_dialogue"] for b in owned)
+        has_tag = bool(SPEECH_TAG_RE.search(prompt))
+        denies = bool(NO_SPEECH_RE.search(prompt))
+        if expects_speech and denies:
+            rep.error("WF-09",
+                      "**这一镜认领的节拍里有对白，提示词却声明「无人说话」** —— "
+                      "整场戏会被做成默片",
+                      beats_with_dialogue=[b for b in owned if beats[b]["has_dialogue"]],
+                      fix="躲烧字幕只能写 No subtitles，**不能把台词删掉**；"
+                          "台词照官方写 <d>[Chinese] …</d> 并保留禁字幕句")
+        elif expects_speech and not has_tag:
+            rep.error("WF-09",
+                      "这一镜有对白，但提示词里没有 `<d>[…]` 台词标注",
+                      fix="h3res/guide_ref_en.md：台词写 <d>[Chinese] 原文</d>")
+        elif not expects_speech and not denies:
+            rep.warn("WF-09", "这一镜无对白，但提示词没有显式声明无人说话（容易漂出人声）")
+
+    # ── WF-10 取景必须写在描述段起始（旧线 5.11：首帧是什么构图第一句就写什么）──
+    # 判据：`[Shot 1]` 标记之后紧接着就应该是取景句 —— 这是本项目四镜的写法，
+    # 也正好把前面那一段画风句与 GEO 块排除在外，不会因为锁定件长而误报。
+    if shot is not None:
+        want = norm_ws(shot.get("framing_en") or shot.get("shot_size") or "")
+        m = re.search(r"\[\s*shot\s*1\s*\]", styled, re.I)
+        if m:
+            head = norm_ws(styled[m.end():m.end() + 400])
+            where = "`[Shot 1]` 之后 400 字内"
+        else:
+            probe = np_styled
+            if pos is not None and pos >= 0 and style_len:
+                probe = probe[:pos] + probe[pos + style_len:]
+            if geo:
+                probe = probe.replace(norm_ws(geo), "")
+            head, where = probe.strip()[:300], "描述段开头 300 字内"
+        if want and want.lower() not in head.lower():
+            rep.error("WF-10",
+                      f"镜头 {shot.get('id')} 的取景句「{want}」没出现在{where}",
+                      got=head[:160] + "…",
+                      fix="首帧与提示词取景不一致时 H3 会真的移机位，"
+                          "并在背景留下一个重复的人")
+
+    # ── WF-11 帧数 17k+5 ──
+    if h3:
+        wv = h3[0].get("widgets_values") or []
+        if len(wv) >= 4 and isinstance(wv[3], int):
+            n = wv[3]
+            if n < 5 or (n - 5) % H3_GRID != 0:
+                rep.error("WF-11", f"H3 帧数 {n} 不在 17k+5 网格上",
+                          nearest=[(n - 5) // H3_GRID * H3_GRID + 5,
+                                   ((n - 5) // H3_GRID + 1) * H3_GRID + 5])
+            if shot is not None and shot.get("frames") and n != shot["frames"]:
+                rep.error("WF-11",
+                          f"工作流帧数 {n} ≠ 分镜表登记的 {shot['frames']}",
+                          fix="分镜表是权威；改表或改工作流，不许两边不一致")
+        else:
+            rep.warn("WF-11", "H3 节点的 widgets_values 布局与预期不同，帧数检查跳过")
+
+    # ── WF-12 画布 ──
+    want_canvas = rules.get("canvas")
+    canvas = None
+    if h3:
+        wv = h3[0].get("widgets_values") or []
+        if len(wv) >= 3 and isinstance(wv[1], int) and isinstance(wv[2], int):
+            canvas = (wv[1], wv[2])
+    if canvas is None and lat:
+        wv = lat[0].get("widgets_values") or []
+        if len(wv) >= 2 and isinstance(wv[0], int) and isinstance(wv[1], int):
+            canvas = (wv[0], wv[1])
+    if canvas is None:
+        # edit 链没有尺寸节点 —— 尺寸来自喂进去的那张底图，去读它的文件头
+        for n in nodes:
+            if n.get("type") != "LoadImage":
+                continue
+            name = (n.get("widgets_values") or [""])[0]
+            for cand in (proj / "storyboard" / name, proj / "assets" / name,
+                         proj / "outputs" / name):
+                if cand.exists():
+                    canvas = image_size(cand)
+                    if canvas:
+                        rep.info("WF-12", f"画布取自底图 {name}：{canvas[0]}×{canvas[1]}")
+                    break
+            if canvas:
+                break
+    if canvas:
+        w, h_ = canvas
+        if w % 32 or h_ % 32:
+            rep.error("WF-12", f"画布 {w}×{h_} 不是 32 的倍数")
+        if want_canvas and list(canvas) != list(want_canvas):
+            rep.error("WF-12", f"画布 {w}×{h_} ≠ 项目锁定 {want_canvas[0]}×{want_canvas[1]}")
+        if kind == "h3" and min(w, h_) != H3_SHORT_SIDE:
+            rep.error("WF-12", f"H3 画布短边 {min(w, h_)} ≠ {H3_SHORT_SIDE}")
+
+    # ── WF-13 提示词里的书名号会被画进画面（旧线实测）──
+    for ch in ("《", "》", "「", "」", "<", ">"):
+        if ch in ("<", ">"):
+            continue
+        if ch in prompt:
+            rep.error("WF-13", f"提示词里出现 `{ch}` —— 旧线实测会被画进画面")
+            break
+
+    # ── WF-14 防跳轴句（**只在没登记 GEO 块时兜底** —— 否则 WF-05 已经覆盖了）──
+    anchor = rules.get("axis_sentence")
+    if anchor and not geo and norm_ws(anchor).lower() not in norm_ws(prompt).lower():
+        rep.error("WF-14", "缺防跳轴句（GEO 的 screen direction rule 必须逐字在提示词里）",
+                  expect=anchor[:90] + "…")
+
+    # ── WF-15 采样档位与 LoRA 必须成对 ──
+    lora_steps = []
+    for n in nodes:
+        if n.get("type") != "LoraLoaderModelOnly":
+            continue
+        name = (n.get("widgets_values") or [""])[0] or ""
+        m = re.search(r"(\d+)\s*steps?", name)
+        if m:
+            lora_steps.append(int(m.group(1)))
+    used = []
+    for n in nodes:
+        t = n.get("type")
+        wv = n.get("widgets_values") or []
+        if t in ("BasicScheduler",) and len(wv) >= 2 and isinstance(wv[1], int):
+            used.append(wv[1])
+        elif t == "KSampler" and len(wv) >= 3 and isinstance(wv[2], int):
+            used.append(wv[2])
+    if lora_steps and used and set(lora_steps) != set(used):
+        rep.error("WF-15", f"采样步数 {sorted(set(used))} 与 LoRA 档位 {sorted(set(lora_steps))} 不成对",
+                  fix="Ref2VA 只有 4 步 LoRA；8 步是 fl2v 的")
+
+    # ── WF-16 工作流自洽：SaveVideo 前缀 / LoadImage 必须与镜头表登记的一致 ──
+    # 一个工作流文件被反复改写成四镜，最容易留下的就是这种"串档"。
+    if shot is not None:
+        sv = next((n for n in nodes if n.get("type") == "SaveVideo"), None)
+        if sv:
+            prefix = (sv.get("widgets_values") or [""])[0] or ""
+            sid = shot.get("id")
+            if sid and not re.search(rf"(^|[/_]){re.escape(sid)}(_|$)", prefix):
+                rep.error("WF-16",
+                          f"SaveVideo 前缀 `{prefix}` 里没有镜头号 {sid}",
+                          fix="一镜一条工作流，不许反复改写同一个文件")
+        li = next((n for n in nodes if n.get("type") == "LoadImage"), None)
+        if li:
+            got = (li.get("widgets_values") or [""])[0]
+            want = shot.get("first_frame")
+            if want and got and got != want:
+                rep.error("WF-16",
+                          f"LoadImage 用的是 `{got}`，镜头表登记的首帧是 `{want}`")
+
+    packet = {
+        "project": proj.name,
+        "subject": wf_name,
+        "kind": kind,
+        "workflow_file": f"workflows/{wf_name}.json",
+        "prompt_chars": noscript_chars(prompt),
+        "prompt": prompt,
+        "shot": shot,
+        "beats_owned": [
+            {"id": b, "header": (chain.get("beats") or {}).get(b, {}).get("header", ""),
+             "dialogue": (chain.get("beats") or {}).get(b, {}).get("channels", {}).get("对白", []),
+             "vo": (chain.get("beats") or {}).get(b, {}).get("channels", {}).get("VO", []),
+             "visual": (chain.get("beats") or {}).get(b, {}).get("channels", {}).get("画面", [])}
+            for b in (shot or {}).get("beats", [])],
+        "geo_block": geo,
+        "mechanical": rep.dump(),
+    }
+    return rep, packet
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  封条：把 agent 的判定钉在文件哈希上
+# ══════════════════════════════════════════════════════════════════════
+def subject_files(proj: Path, subject: str, rules: dict) -> dict:
+    """被审对象 → {相对路径: 绝对路径}。**改了其中任何一个，封条立即过期。**"""
+    out = {}
+    if subject in ("postflight", "chain"):
+        for rel in (rules.get("script"), rules.get("geo_file"),
+                    rules.get("shot_table"), "项目卡.md",
+                    "storyboard/画幅1376x768_光学参数.md"):
+            if rel and (proj / rel).exists():
+                out[rel] = proj / rel
+        for p in sorted((proj / "workflows").glob("*.json")):
+            out[str(p.relative_to(proj))] = p
+        out["audit_rules.json"] = proj / "audit_rules.json"
+    else:
+        p = proj / "workflows" / f"{subject}.json"
+        if p.exists():
+            out[str(p.relative_to(proj))] = p
+        for rel in (rules.get("script"), rules.get("shot_table"), rules.get("geo_file")):
+            if rel and (proj / rel).exists():
+                out[rel] = proj / rel
+        out["audit_rules.json"] = proj / "audit_rules.json"
+    return out
+
+
+def audit_path(proj: Path, subject: str) -> Path:
+    d = proj / "review" / "audits"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{subject}.audit.json"
+
+
+def cmd_preflight(proj: Path, wf_name: str, rules: dict, as_json: bool) -> int:
+    crep, chain = check_chain(proj, rules)
+    rep, packet = check_workflow(proj, wf_name, rules, chain)
+    packet["chain"] = crep.dump()
+    PACKET_DIR.mkdir(parents=True, exist_ok=True)
+    pf = PACKET_DIR / f"{proj.name}.{wf_name}.packet.json"
+    pf.write_text(json.dumps(packet, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if as_json:
+        print(json.dumps({"chain": crep.dump(), "workflow": rep.dump(),
+                          "packet": str(pf)}, ensure_ascii=False, indent=2))
+    else:
+        crep.print()
+        rep.print()
+        print(f"\n📦 审计包：{pf.relative_to(ROOT)}")
+        print(f"   下一步：把审计包交给子 agent，它写出判定 JSON 后跑")
+        print(f"   python tools/pipeline_audit.py seal {proj.name} {wf_name} <判定.json>")
+    return 0 if (rep.ok() and crep.ok()) else 1
+
+
+def cmd_packet(proj: Path, subject: str) -> int:
+    pf = PACKET_DIR / f"{proj.name}.{subject}.packet.json"
+    if not pf.exists():
+        raise SystemExit(f"❌ 没有审计包 {pf} —— 先跑 preflight")
+    print(read(pf))
+    return 0
+
+
+def cmd_seal(proj: Path, subject: str, verdict_file: str, rules: dict) -> int:
+    vf = Path(verdict_file)
+    if not vf.is_absolute():
+        vf = ROOT / vf
+    if not vf.exists():
+        raise SystemExit(f"❌ 判定文件不存在：{vf}")
+    v = json.loads(read(vf))
+
+    for k in ("subject", "verdict", "findings"):
+        if k not in v:
+            raise SystemExit(f"❌ 判定 JSON 缺字段 `{k}`（schema 见 pipeline/docs/06_审计闸门.md）")
+    if v["verdict"] not in ("pass", "fail"):
+        raise SystemExit("❌ verdict 只能是 pass / fail")
+    if v["subject"] not in (subject, f"{proj.name}/{subject}"):
+        raise SystemExit(f"❌ 判定里的 subject={v['subject']!r} 与要封存的 {subject!r} 对不上")
+
+    # 机械 ERROR 必须逐条被 agent 处理：要么列进 findings，要么显式豁免并给理由
+    pf = PACKET_DIR / f"{proj.name}.{subject}.packet.json"
+    mech_errors = []
+    if pf.exists():
+        pk = json.loads(read(pf))
+        mech_errors = ((pk.get("mechanical") or {}).get("errors") or []) + \
+                      ((pk.get("chain") or {}).get("errors") or [])
+    waived = {w.get("code") for w in (v.get("waivers") or [])}
+    if not all(w.get("reason") for w in (v.get("waivers") or [])):
+        raise SystemExit("❌ 每条 waiver 都必须写 reason")
+    unhandled = [e for e in mech_errors if e["code"] not in waived]
+    if v["verdict"] == "pass" and unhandled:
+        raise SystemExit(
+            "❌ 机械检查还有 " + str(len(unhandled)) + " 条 ERROR，不能判 pass：\n  " +
+            "\n  ".join(f"[{e['code']}] {e['msg'][:90]}" for e in unhandled) +
+            "\n要么修，要么在 waivers 里逐条给理由。")
+
+    files = subject_files(proj, subject, rules)
+    v["subjects"] = {rel: sha256(p) for rel, p in files.items()}
+    v["sealed_at"] = datetime.now().isoformat(timespec="seconds")
+    v["sealed_by"] = "tools/pipeline_audit.py seal"
+    if pf.exists():
+        v["packet"] = str(pf.relative_to(ROOT))
+        v["mechanical_at_seal"] = {"errors": len(mech_errors)}
+    out = audit_path(proj, subject)
+    out.write_text(json.dumps(v, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"🔒 已封存 {out.relative_to(ROOT)}（绑定 {len(files)} 个文件）")
+    print(f"   判定：{v['verdict']}　findings：{len(v['findings'])}")
+    return 0 if v["verdict"] == "pass" else 1
+
+
+def cmd_verify(proj: Path, subject: str, rules: dict, quiet: bool = False) -> int:
+    """run.py 提交前调它。0=放行，1=判定不过，2=封条缺失/过期。"""
+    out = audit_path(proj, subject)
+    if not out.exists():
+        print(f"⛔ [AUDIT-01] 没有审计封条 {out.relative_to(ROOT)}。")
+        print(f"   先跑：python tools/pipeline_audit.py preflight {proj.name} {subject}")
+        print(f"   再让子 agent 出判定，然后 seal。")
+        return 2
+    v = json.loads(read(out))
+    files = subject_files(proj, subject, rules)
+    stale = []
+    for rel, h in (v.get("subjects") or {}).items():
+        p = proj / rel
+        if not p.exists() or sha256(p) != h:
+            stale.append(rel)
+    for rel in files:
+        if rel not in (v.get("subjects") or {}):
+            stale.append(rel + "（新增，未在封条内）")
+    if stale:
+        print(f"⛔ [AUDIT-02] 审计封条已过期 —— 被审文件在审计之后变了：{stale}")
+        print(f"   提示词改了就必须重新审。重跑 preflight → 子 agent → seal。")
+        return 2
+    if v["verdict"] != "pass":
+        blocking = v.get("blocking") or [f.get("id") for f in v["findings"]
+                                         if f.get("level") == "error"]
+        print(f"⛔ [AUDIT-03] 审计判定为 fail。阻塞项：{blocking}")
+        for f in v["findings"]:
+            if f.get("level") == "error":
+                print(f"   - [{f.get('id','?')}] {f.get('claim','')[:160]}")
+        return 1
+    if not quiet:
+        print(f"🔓 审计封条有效（{v.get('sealed_at')}，{len(v.get('subjects') or {})} 个文件），"
+              f"判定 pass，findings {len(v['findings'])} 条")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  第三道：项目完成后的**流程**审计
+# ══════════════════════════════════════════════════════════════════════
+def cmd_postflight(proj: Path, rules: dict, as_json: bool) -> int:
+    crep, chain = check_chain(proj, rules)
+    per_wf = []
+    for wf in sorted((proj / "workflows").glob("*.json")):
+        r, _pk = check_workflow(proj, wf.stem, rules, chain)
+        a = audit_path(proj, wf.stem)
+        sealed = json.loads(read(a)) if a.exists() else None
+        per_wf.append({
+            "workflow": wf.stem,
+            "errors": [i["code"] for i in r.errors],
+            "warns": [i["code"] for i in r.warns],
+            "sealed": None if sealed is None else {
+                "verdict": sealed.get("verdict"),
+                "sealed_at": sealed.get("sealed_at"),
+                "findings": len(sealed.get("findings") or [])},
+        })
+    artifacts = sorted(str(p.relative_to(proj))
+                       for p in (proj / "outputs").glob("*") if p.is_file())
+    packet = {
+        "project": proj.name,
+        "kind": "postflight",
+        "chain": crep.dump(),
+        "beats": chain.get("beats") or {},
+        "shots": chain.get("shots") or [],
+        "workflows": per_wf,
+        "artifacts": artifacts,
+        "questions": [
+            "本轮流程里，哪一步**本该拦住**某个缺陷却没有拦住？",
+            "哪些缺陷本程序已经能机械抓到？哪些只能靠人/agent 的语义判断？",
+            "为了下一轮不再犯，**要新增哪一条机械检查**？（写成可实现的判据）",
+            "有没有'检查器误报'或'检查器过期'的迹象？",
+        ],
+    }
+    PACKET_DIR.mkdir(parents=True, exist_ok=True)
+    pf = PACKET_DIR / f"{proj.name}.postflight.packet.json"
+    pf.write_text(json.dumps(packet, ensure_ascii=False, indent=2), encoding="utf-8")
+    if as_json:
+        print(json.dumps(packet, ensure_ascii=False, indent=2))
+    else:
+        crep.print()
+        print(f"\n📦 流程审计包：{pf.relative_to(ROOT)}（{len(per_wf)} 条工作流，"
+              f"{len(artifacts)} 个产物）")
+    return 0 if crep.ok() else 1
+
+
+def cmd_status(proj: Path, rules: dict) -> int:
+    crep, chain = check_chain(proj, rules)
+    crep.print()
+    print("\n审计封条：")
+    d = proj / "review" / "audits"
+    if not d.exists() or not list(d.glob("*.json")):
+        print("  （一条都没有）")
+    for f in sorted(d.glob("*.json")):
+        v = json.loads(read(f))
+        rc = cmd_verify(proj, f.stem, rules, quiet=True)
+        state = {0: "✅ 有效 pass", 1: "❌ 判定 fail", 2: "⌛ 缺失/过期"}[rc]
+        print(f"  - {f.stem:<28} {state}   sealed {v.get('sealed_at','?')}")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════
+def main() -> int:
+    ap = argparse.ArgumentParser(description="流程审计闸门（规矩 §7）")
+    ap.add_argument("cmd", choices=["chain", "preflight", "packet", "seal",
+                                    "verify", "postflight", "status"])
+    ap.add_argument("project")
+    ap.add_argument("subject", nargs="?", help="工作流名 / postflight / chain")
+    ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON 路径")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args()
+
+    proj = project_dir(a.project)
+    rules = load_rules(proj)
+
+    if a.cmd == "chain":
+        rep, chain = check_chain(proj, rules)
+        if a.json:
+            print(json.dumps({"report": rep.dump(), "beats": chain.get("beats"),
+                              "shots": chain.get("shots")}, ensure_ascii=False, indent=2))
+        else:
+            rep.print()
+        return 0 if rep.ok() else 1
+    if a.cmd == "preflight":
+        if not a.subject:
+            ap.error("preflight 需要工作流名")
+        return cmd_preflight(proj, a.subject, rules, a.json)
+    if a.cmd == "packet":
+        if not a.subject:
+            ap.error("packet 需要主题")
+        return cmd_packet(proj, a.subject)
+    if a.cmd == "seal":
+        if not a.subject or not a.verdict:
+            ap.error("seal 需要：<主题> <判定.json>")
+        return cmd_seal(proj, a.subject, a.verdict, rules)
+    if a.cmd == "verify":
+        if not a.subject:
+            ap.error("verify 需要工作流名")
+        return cmd_verify(proj, a.subject, rules)
+    if a.cmd == "postflight":
+        return cmd_postflight(proj, rules, a.json)
+    if a.cmd == "status":
+        return cmd_status(proj, rules)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

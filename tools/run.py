@@ -297,6 +297,31 @@ def run_gate(wf_path: Path) -> bool:
     return True
 
 
+def run_audit_gate(proj: Path, wf_name: str) -> bool:
+    """提交之前跑**流程审计封条**。规矩 §7 + `pipeline/docs/06_审计闸门.md`。
+
+    生图、生视频**都**要过这一道：子 agent 必须先看过提示词，
+    判定封存在 `review/audits/<工作流>.audit.json`，且被审文件的哈希没变过。
+    **改了提示词就必须重新审** —— 靠哈希，不靠自觉。
+    """
+    gate = ROOT / "tools" / "pipeline_audit.py"
+    if not gate.exists():
+        print("⚠️  找不到 tools/pipeline_audit.py —— 审计闸门跳过（请补上）")
+        return True
+    import subprocess
+    r = subprocess.run([sys.executable, str(gate), "verify", proj.name, wf_name],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    print(r.stdout or "")
+    if r.returncode != 0:
+        print("⛔ 审计闸门不通过 —— 拒绝提交。")
+        print(f"   ① python tools/pipeline_audit.py preflight {proj.name} {wf_name}")
+        print(f"   ② 把审计包交给子 agent，写出判定 JSON")
+        print(f"   ③ python tools/pipeline_audit.py seal {proj.name} {wf_name} <判定.json>")
+        print("   或明确用 --skip-gate。")
+        return False
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="唯一执行器：跑项目里的画布工作流")
     ap.add_argument("project", nargs="?", help="项目名（projects/ 下的文件夹名）")
@@ -337,6 +362,8 @@ def main() -> int:
         return list_workflows(args.project) or 1
 
     if not args.skip_gate and not run_gate(wf_path):
+        return 1
+    if not args.skip_gate and not run_audit_gate(proj, args.workflow):
         return 1
 
     out_dir = Path(args.out) if args.out else proj / "outputs"
