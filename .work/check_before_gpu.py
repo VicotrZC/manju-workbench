@@ -321,6 +321,8 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="机器可读输出（给子 agent 用）")
     ap.add_argument("--summary", action="store_true",
                     help="每个文件一行：档位 / 画布 / LoRA / 错误数")
+    ap.add_argument("--graph", action="store_true",
+                    help="打印节点图：每个节点的类型 / 关键 widget / 上游连线（做 A/B 前对齐变量用）")
     args = ap.parse_args()
 
     if args.file:
@@ -360,6 +362,41 @@ def main() -> int:
     info = fetch_object_info() if args.online else None
     reps = [check_workflow(p, info) for p in targets]
     onl = online_context() if args.online else None
+
+    if args.graph:
+        for p in targets:
+            wf = json.loads(p.read_text(encoding="utf-8"))
+            if "nodes" not in wf:
+                print(f"{p.name}: 不是画布工作流")
+                continue
+            nodes = {n["id"]: n for n in wf["nodes"]}
+            print(f"\n=== {p.name} ===")
+            for n in wf["nodes"]:
+                t = n["type"]
+                if t in ANNOTATION_TYPES:
+                    continue
+                # 关键 widget：字符串截断，其余原样
+                wv = []
+                for v in (n.get("widgets_values") or []):
+                    if isinstance(v, str):
+                        wv.append(f'"{v[:48]}{"…" if len(v) > 48 else ""}"')
+                    else:
+                        wv.append(json.dumps(v, ensure_ascii=False))
+                src = []
+                for i in (n.get("inputs") or []):
+                    if i.get("link") is None:
+                        continue
+                    l = next((x for x in (wf.get("links") or []) if x[0] == i["link"]), None)
+                    if l:
+                        on = nodes.get(l[1], {}).get("type", "?")
+                        src.append(f"{i['name']}←{l[1]}:{on}")
+                mode = "" if n.get("mode", 0) == 0 else f"  [mode={n['mode']} 旁路]"
+                print(f"  {n['id']:>3} {t:<38}{mode}")
+                if wv:
+                    print(f"      widget: {' | '.join(wv)}")
+                if src:
+                    print(f"      连线  : {', '.join(src)}")
+        return 0
 
     if args.summary:
         def grab(notes, key, sep="｜"):

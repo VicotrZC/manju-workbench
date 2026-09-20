@@ -67,6 +67,14 @@ research/_articles/
 tmp/
 .temp/
 
+# 归档包：环境快照/整目录备份，永远不是源。
+# 2026-09-20：加这条之前 `git add -A` 会把 backup/ 里 2.5 GB 的 .tar 直接吞进库。
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+
 # 工具缓存
 # 2026-09-20：skill 已从 .zcode/skills/ 搬到根目录 skills/（zcode 已卸载，且它偷用户数据）。
 # .zcode/ 现在整个忽略 —— 万一那个工具又出现，也不让它把东西塞进库里。

@@ -8,7 +8,7 @@ import runpy
 import sys
 from pathlib import Path
 
-ROOT = Path(r"E:\Learn\minimax-h3-cloud")
+ROOT = Path(__file__).resolve().parents[1]
 LOG = ROOT / ".work" / "tunnel.log"
 
 # line-buffered so progress is visible while it runs

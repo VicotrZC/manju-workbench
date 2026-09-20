@@ -31,6 +31,9 @@ import urllib.request
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+# stderr 也要包：argparse 的 error() 走 stderr，只包 stdout 的话中文报错会乱码
+# （2026-09-20 实测 `--list` 少了项目名时，中文提示在 GBK 控制台上变成一堆问号）。
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # ── 路径：一律从脚本位置往上推，**不许写死盘符**（规矩.md §0）─────────────
 ROOT = Path(__file__).resolve().parents[1]

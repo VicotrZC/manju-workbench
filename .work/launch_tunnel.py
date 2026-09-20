@@ -24,8 +24,12 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PYW = ROOT / ".work" / "venv" / "Scripts" / "pythonw.exe"
-PY = ROOT / ".work" / "venv" / "Scripts" / "python.exe"
+# 2026-09-20：原来写死 `.work/venv/Scripts/python*.exe`。那个 venv **不入库**
+# （agent.md §四 明确不跟踪），换台电脑/新克隆里根本没有 → 隧道一启动就 FileNotFound。
+# 改成用"当前正在跑这段代码的解释器"，再找同目录的 pythonw.exe（无控制台窗口，适合常驻）。
+PY = Path(sys.executable)
+_PYW = PY.with_name("pythonw.exe")
+PYW = _PYW if _PYW.exists() else PY
 DAEMON = ROOT / ".work" / "run_tunnel_daemon.py"
 LOG = ROOT / ".work" / "tunnel.log"
 PORT = 8188

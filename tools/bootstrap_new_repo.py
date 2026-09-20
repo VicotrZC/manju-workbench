@@ -44,7 +44,10 @@ COPY_FILES = [
     ".work/check_before_gpu.py",    # 算力门禁（规矩.md §7）
     ".work/probe_source.py",        # 下载前探测源
     ".work/archive_scripts.py",     # 归档工具
-    ".work/comfy_api.py",           # 被 tools/run.py 取代，留作兼容
+    # ⚠️ 不再复制 .work/comfy_api.py（2026-09-20 删）：47 个引用者**全在 archive/**，
+    #    活代码零引用；而它内部写死 `ROOT = Path(r"E:\Learn\minimax-h3-cloud")`，
+    #    带进新仓库等于埋一个"把产物写回老仓库"的雷（违反 §0）。
+    ".work/tunnel_comfyui.py",      # 隧道本体（守护依赖它，2026-09-20 补漏）
     ".work/launch_tunnel.py",       # 隧道
     ".work/run_tunnel_daemon.py",   # 隧道守护
     # SSH 通用连接（ssh/ 两百多个里只留这 13 个）
