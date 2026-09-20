@@ -475,16 +475,26 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
             continue
         _style_checked.add(fw)
         sub, _pk = check_workflow(proj, fw, rules, {"shots": [], "beats": {}})
+        # **身份类（WF-07/08）与否定枚举（WF-22）也要透传** —— 脸是在首帧定下来的，
+        # 首帧工作流才是身份检查真正该掐的地方（子 agent 2026-09-21）。
+        # ⚠️ **沿用子条目的 level，不许一律升成 ERROR**，也不许全挂在"画风闸门"名下
+        # —— WF-22 本是 WARN，WF-07/08 也不是画风问题（同一轮子 agent 指出）。
+        PROP = {
+            "WF-02": ("SHOT-05", "首帧画风锁定句"),
+            "WF-03": ("SHOT-05", "首帧画风句位置"),
+            "WF-04": ("SHOT-05", "首帧画风句占比"),
+            "WF-07": ("SHOT-07", "首帧缺身份锚"),
+            "WF-08": ("SHOT-07", "首帧缺正向否定锁"),
+            "WF-22": ("SHOT-08", "首帧提示词里有否定枚举"),
+        }
         for it in sub.items:
-            # **身份类（WF-07/08）也要透传** —— 脸是在首帧定下来的，
-            # 首帧工作流才是身份检查真正该掐的地方（子 agent 2026-09-21）。
-            # WF-22 同理：首帧提示词里的否定枚举会被 H3 继承。
-            if it["code"] in ("WF-02", "WF-03", "WF-04", "WF-07", "WF-08", "WF-22"):
-                rep.error("SHOT-05",
-                          f"首帧画风闸门不过（四镜首帧都出自 {fw}）："
-                          f"[{it['code']}] {it['msg']}",
-                          detail={k: v for k, v in it.items()
-                                  if k not in ("level", "code", "msg")})
+            if it["code"] in PROP:
+                code, what = PROP[it["code"]]
+                rep.add(it["level"], code,
+                        f"{what}不过（镜头表登记的首帧出自 {fw}）："
+                        f"[{it['code']}] {it['msg']}",
+                        detail={k: v for k, v in it.items()
+                                if k not in ("level", "code", "msg")})
 
     # ── SHOT-06 首帧工作流串档：一条首帧工作流不该被 2 镜以上登记 ──
     # 子 agent 2026-09-21 提出。同一条工作流跑多镜 = 出完就改提示词再出下一镜，
@@ -949,6 +959,25 @@ def subject_files(proj: Path, subject: str, rules: dict) -> dict:
             if rel and (proj / rel).exists():
                 out[rel] = proj / rel
         out["audit_rules.json"] = proj / "audit_rules.json"
+
+        # ── SEAL-01：**首帧血缘与提示词归档也必须绑进封条**（子 agent 2026-09-21 实测的漏洞）──
+        # 原先只绑 5 个文件，不含 `workflows/FF_*.json` ——
+        # 于是**改了首帧提示词，这一镜的封条不会过期，verify 照样报"封条有效"**。
+        # 而画风与身份恰恰是首帧那条工作流决定的（SHOT-05/06、WF-22、WF-07/08 说的都是它）。
+        # "改了提示词就必须重新审"这条在首帧一侧原本是漏的。
+        try:
+            tbl = json.loads(read(proj / rules["shot_table"])) if rules.get("shot_table") else {}
+        except (OSError, ValueError):
+            tbl = {}
+        for s in tbl.get("shots") or []:
+            if s.get("workflow") != subject:
+                continue
+            fw = s.get("first_frame_workflow")
+            if fw and (proj / "workflows" / f"{fw}.json").exists():
+                out[f"workflows/{fw}.json"] = proj / "workflows" / f"{fw}.json"
+            pf = proj / "prompts" / f"{s.get('id')}.prompt.md"
+            if pf.exists():
+                out[str(pf.relative_to(proj))] = pf
     return out
 
 

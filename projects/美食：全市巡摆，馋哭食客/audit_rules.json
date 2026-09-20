@@ -14,14 +14,22 @@
 
   "_style_locks_about": [
     "① 中文句逐字搬自 项目卡.md §画风锁定句（2026-09-20 用户选定候选 I）。",
-    "② 英文句是本程序登记的 H3 版 —— **项目卡里原本没有英文版**，",
-    "   而四镜的 H3 提示词里用的是英文。若不登记英文版，WF-02 无从核对。",
-    "   ⚠️ 这一条**待用户在项目卡里确认**（我加的，不是原本就有的）。"
+    "★ 2026-09-21 用户拍板：**不要英文。** 我先前自己加的那条英文 H3 锁**已删除**。",
+    "  锁只有中文这一条，**H3 提示词也要带中文原文，不许翻译** ——",
+    "  由 WF-02 强制：带英文锁的提示词会被直接拒收。",
+    "  这也修掉了 WF-19 报的那个问题（闸门原本在核对一句没人拍板的话）。"
   ],
   "style_locks": {
-    "画面锁定句①中文（t2i 用）": "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。",
-    "画面锁定句①英文（H3 用，本项目登记）": "The target video is a stylised 3D animated series look: cel-flat shading layered with volumetric light, clear transparent air, saturated but not harsh colours and a clean simple composition; the characters are rendered in a cartoon style with crisp outlines, layered shadows and finely drawn features."
+    "画面锁定句①中文": "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。"
   },
+
+  "_dialogue_policy_about": [
+    "★ 2026-09-21 用户拍板：**要说话。**",
+    "戏里写了的对白与 VO 必须进成片，不许再做成默片。",
+    "由 WF-09（有对白却声明无人说话 / 缺 <d> 标注）与 WF-09b（任一句原文没落进 <d>…</d>）强制。",
+    "躲烧字幕只能写 No subtitles —— 规矩 §9：与 <d> 不是二选一。"
+  ],
+  "dialogue_policy": "script_is_authoritative",
 
   "_style_ratio_about": [
     "实测标定（2026-09-21）：",

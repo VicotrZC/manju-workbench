@@ -46,8 +46,16 @@
       "level": "error",
       "code": "WF-09",
       "claim": "B2 的三句对白与一句 VO 全部没进提示词，提示词反而声明本镜无人说话——按这条提示词生成出来必然是默片。",
-      "evidence": "审计包 17:44:52：WF-09 报默片（beats_with_dialogue=[B2]）；WF-09b 报「这一镜有 4 条台词/VO 的原文没落进 <d>…</d>」，<d> 块数 = 0。prompt 实测无 <d> 标记，summary = Nobody speaks in this shot，overall_soundscape = No voices.",
+      "evidence": "审计包 17:44:52：WF-09 报默片（beats_with_dialogue=[B2]）；prompt 实测 <d> 块数 = 0，summary = Nobody speaks in this shot，detailed_description = no dialogue is spoken and nobody's lips move，overall_soundscape = No voices.（同一批台词「没落进 <d>」的那一面另立 F25，避免一条 finding 顶两个码）",
       "fix": "按发声顺序编号后照官方写：<Subject 3> (S1) says, <d>[Chinese] 老板，这猪肉怎么卖啊！</d> / <Subject 2> (S2) says, <d>[Chinese] 四十五一斤。</d> / <Subject 3> (S1) replies, <d>[Chinese] 这么贵？</d>；VO 照 h3res/guide_ref_en.md §5.4 用同一 (S1) 并标 off-screen。禁字幕句必须保留（规矩.md §10：<d> 与禁字幕句不是二选一），同时删掉 Nobody speaks / no dialogue is spoken and nobody's lips move / No voices. 三处宣告。"
+    },
+    {
+      "id": "F25",
+      "level": "error",
+      "code": "WF-09b",
+      "claim": "戏层写了的 4 条台词/VO，一条都没有落进 `<d>…</d>` —— 这不是「少写几句」，是整条声音通道在提示词里不存在。",
+      "evidence": "审计包 WF-09b：「这一镜有 4 条台词/VO 的原文没落进 <d>…</d>」，逐条为 老板，这猪肉怎么卖啊！／四十五一斤。／这么贵？／我怎么记得，猪肉没这么贵。；prompt 里 <d> 块数 = 0（实测 Contains('<d>')=False）。判据本身已按戏 §二 的字数口径剥离说话人前缀与「」，所以这 4 条是真缺。",
+      "fix": "4 条逐句照 h3res/guide_ref_en.md §5.4 写进 <d>[Chinese] 原文</d>（骨架见 F1 的 fix），说话人用 (S1)/(S2) 而不是把「闫清：」写进正文 —— WF-09b 现在按「必须落在某个 <d>…</d> 内」判，不会误伤。"
     },
     {
       "id": "F2",
@@ -242,8 +250,16 @@
         "input": "H3 节点的参考输入（ref_images / ref_videos / ref_audios）＋ prompt 的 retention_analysis",
         "rule": "ERROR 当输入里含音轨而 retention_analysis 没有 fully_copy / reference 标记；ERROR 当标了 fully_copy 却没有对应 <Audio N> 定义。"
       }
+    },
+    {
+      "claim": "封条的绑定范围太窄：subject_files() 对普通主题只绑「本镜工作流 + 戏 + 镜头表 + GEO + audit_rules」——**出首帧的那条工作流不在里面**（本镜封条实测只绑了 5 个文件，没有 workflows/FF_EP02SC01_shot.json）。而本案的画风与身份恰恰由首帧工作流决定（SHOT-05 / SHOT-06 / WF-22 / F22 说的都是它）：改了首帧提示词，S01 的封条**不会过期**，verify 仍会拿旧审计放行 —— 「改了提示词就必须重新审」这条在首帧这一侧是漏的。",
+      "proposed_check": {
+        "code": "SEAL-01",
+        "input": "subject_files() 返回的绑定清单，对照该镜登记的全部上游：first_frame_workflow、prompts/<镜头号>.prompt.md、first_frame 资产文件",
+        "rule": "ERROR 当绑定清单里缺少该镜的 first_frame_workflow / prompts 归档 / 首帧资产；或在 chain 级把每条 first_frame_workflow 一并绑定。判据一句话：**凡是能改变这条成片观感的上游文件，都必须进封条。**"
+      }
     }
   ],
-  "blocking": ["F1", "F2", "F3", "F4", "F5", "F6", "F8", "F9", "F10", "F11", "F12", "F13", "F16", "F18", "F22", "F23"],
+  "blocking": ["F1", "F2", "F3", "F4", "F5", "F6", "F8", "F9", "F10", "F11", "F12", "F13", "F16", "F18", "F22", "F23", "F25"],
   "waivers": []
 }
