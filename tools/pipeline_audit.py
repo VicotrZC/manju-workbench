@@ -131,7 +131,10 @@ def sha256(p: Path) -> str:
 
 
 def read(p: Path) -> str:
-    return p.read_text(encoding="utf-8", errors="replace")
+    # utf-8-sig：**容忍 BOM**。Windows 上 PowerShell 的 `Set-Content -Encoding UTF8`
+    # 和不少编辑器都会写 BOM，用 utf-8 硬读会在 json.loads 处炸掉 ——
+    # 而判定 JSON 正是子 agent / 人手写的，不能因为一个 BOM 就判"封条无效"。
+    return p.read_text(encoding="utf-8-sig", errors="replace")
 
 
 def norm_ws(s: str) -> str:
@@ -732,6 +735,23 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                 rep.error("WF-16",
                           f"LoadImage 用的是 `{got}`，镜头表登记的首帧是 `{want}`")
 
+    # ── WF-18 提示词必须另存一份纯文本（规矩 §1 的 `prompts/` 层）──
+    # 2026-09-21 的实情：`prompts/` 是**空的**，提示词只活在工作流 JSON 里。
+    # 后果是致命的 —— 四镜共用一个工作流反复改写，S02 的提示词被覆盖后**无处可寻**，
+    # 既不能 diff、也不能复盘"当时到底发了什么"。
+    if shot is not None:
+        sid = shot.get("id")
+        pf = proj / "prompts" / f"{sid}.prompt.md"
+        if sid and not pf.exists():
+            rep.error("WF-18",
+                      f"提示词没有以纯文本归档：prompts/{sid}.prompt.md",
+                      fix="跑 `python tools/pipeline_audit.py sync-prompts <项目>` 生成。"
+                          "它是工作流被改写时唯一的备份，也让前后两版可以 diff")
+        elif sid and norm_ws(read(pf)) != norm_ws(prompt):
+            rep.error("WF-18",
+                      f"prompts/{sid}.prompt.md 与工作流里的提示词**不一致**（有一边被改过）",
+                      fix="两边必须一致；改哪边都要同步另一边，否则审计的是旧版")
+
     packet = {
         "project": proj.name,
         "subject": wf_name,
@@ -958,11 +978,56 @@ def cmd_status(proj: Path, rules: dict) -> int:
     return 0
 
 
+def cmd_sync_prompts(proj: Path, rules: dict) -> int:
+    """把每条工作流里的正向提示词抽成 `prompts/<镜头号>.prompt.md`。
+
+    **这是派生物，不做任何内容决定** —— 纯粹把已经存在的工作流里的文本复制出来，
+    让 `prompts/` 这一层真正落地（规矩 §1），也让提示词能被 diff、能在工作流被改写后幸存。
+    """
+    _rep, chain = check_chain(proj, rules)
+    shots = chain.get("shots") or []
+    d = proj / "prompts"
+    d.mkdir(parents=True, exist_ok=True)
+    written, missing = [], []
+    for s in shots:
+        sid, wfn = s.get("id"), s.get("workflow")
+        if not sid:
+            continue
+        if not wfn or not (proj / "workflows" / f"{wfn}.json").exists():
+            missing.append(f"{sid}（工作流文件不存在，提示词已丢失）")
+            continue
+        wf = load_workflow(proj / "workflows" / f"{wfn}.json")
+        h3 = h3_nodes(wf)
+        if h3:
+            prompt = (h3[0].get("widgets_values") or [""])[0] or ""
+        else:
+            sampler = next((n for n in wf.get("nodes", []) if n.get("type") in
+                            ("KSampler", "KSamplerAdvanced", "SamplerCustom",
+                             "SamplerCustomAdvanced")), None)
+            prompt = upstream_text(wf, sampler["id"], "positive") if sampler else ""
+        if not prompt.strip():
+            missing.append(f"{sid}（取不到正向提示词）")
+            continue
+        f = d / f"{sid}.prompt.md"
+        old = read(f) if f.exists() else None
+        f.write_text(prompt, encoding="utf-8")
+        written.append(f"{sid} ← workflows/{wfn}.json" +
+                       ("（覆盖了旧版）" if old is not None else ""))
+    print(f"✅ 已同步 {len(written)} 份提示词到 {d.relative_to(proj)}：")
+    for w in written:
+        print(f"   - {w}")
+    if missing:
+        print(f"⚠️  {len(missing)} 镜无法同步：")
+        for m in missing:
+            print(f"   - {m}")
+    return 0 if not missing else 1
+
+
 # ══════════════════════════════════════════════════════════════════════
 def main() -> int:
     ap = argparse.ArgumentParser(description="流程审计闸门（规矩 §7）")
     ap.add_argument("cmd", choices=["chain", "preflight", "packet", "seal",
-                                    "verify", "postflight", "status"])
+                                    "verify", "postflight", "status", "sync-prompts"])
     ap.add_argument("project")
     ap.add_argument("subject", nargs="?", help="工作流名 / postflight / chain")
     ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON 路径")
@@ -1000,6 +1065,8 @@ def main() -> int:
         return cmd_postflight(proj, rules, a.json)
     if a.cmd == "status":
         return cmd_status(proj, rules)
+    if a.cmd == "sync-prompts":
+        return cmd_sync_prompts(proj, rules)
     return 0
 
 
