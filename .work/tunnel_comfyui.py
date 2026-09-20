@@ -7,6 +7,7 @@
 地址取 ssh/server.txt，密码取 ssh_pass.txt；密码不打印、不写日志、不入库。
 只做端口转发，不在云端启动、停止或修改任何东西。
 """
+import io
 import select
 import socket
 import sys
@@ -15,6 +16,12 @@ import time
 from pathlib import Path
 
 import paramiko
+
+# 中文输出统一 UTF-8。走 run_tunnel_daemon.py 时 stdout 已被重定向到 tunnel.log
+# （那边显式 encoding="utf-8"），但**直接跑本脚本**时控制台是 GBK，[warn]/[reconnect]
+# 会变乱码 —— 而这两行恰恰是排查隧道断连时唯一能看的线索。
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST, PORT = (ROOT / 'ssh' / 'server.txt').read_text(encoding='utf-8').split()[:2]

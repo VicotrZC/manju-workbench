@@ -15,6 +15,7 @@
     python .work/run.py py .work/launch_tunnel.py --status   # 只看状态（含真实 HTTP 验证）
     python .work/run.py py .work/launch_tunnel.py --stop     # 停掉占用 8188 的进程
 """
+import io
 import json
 import socket
 import subprocess
@@ -22,6 +23,12 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+
+# 控制台默认 GBK，中文输出会乱码。统一改 UTF-8（stderr 也要包 —— subprocess 的报错走那边）。
+# 2026-09-20：本脚本此前只打中文不包装，`python .work/launch_tunnel.py` 的输出在
+# PowerShell 里是一片问号，看不出隧道到底起没起来。
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
 # 2026-09-20：原来写死 `.work/venv/Scripts/python*.exe`。那个 venv **不入库**
