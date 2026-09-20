@@ -29,10 +29,10 @@ tools/ffprobe
 *.webp
 *.bmp
 # 但 **skill 自带的示例图/资源属于 skill 本体**，要进库 —— 否则 clone 下来 skill 是残的
-!/.zcode/skills/**/*.png
-!/.zcode/skills/**/*.jpg
-!/.zcode/skills/**/*.jpeg
-!/.zcode/skills/**/*.webp
+!/skills/**/*.png
+!/skills/**/*.jpg
+!/skills/**/*.jpeg
+!/skills/**/*.webp
 *.tif
 *.tiff
 *.exr
@@ -68,12 +68,9 @@ tmp/
 .temp/
 
 # 工具缓存
-# ⚠️ .zcode/ 里**混着两种东西**：agent 工具的本地配置（不该进库）和 .zcode/skills/（**必须进库**）。
-#    原来写的是 `.zcode/` 一刀切忽略，导致 skills 只能靠 `git add -f` 强塞 ——
-#    后果是**以后往 skills 里加新文件会被静默忽略**（2026-09-20 发现）。
-#    正确写法：忽略 .zcode 的内容，但把 skills 目录重新纳入。
-.zcode/*
-!.zcode/skills
+# 2026-09-20：skill 已从 .zcode/skills/ 搬到根目录 skills/（zcode 已卸载，且它偷用户数据）。
+# .zcode/ 现在整个忽略 —— 万一那个工具又出现，也不让它把东西塞进库里。
+.zcode/
 __pycache__/
 *.py[cod]
 .venv/
