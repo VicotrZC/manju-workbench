@@ -33,9 +33,10 @@ KEEP = {
     "dl_chunked.py",           # agent.md §四：分块并行下载
     "check_before_gpu.py",     # 规矩.md §7：门禁
     "archive_scripts.py",      # 本文件
-    "comfy_api.py",            # 被 tools/run.py 取代，但仍被其他脚本 import（引用检测会兜住）
+    # comfy_api.py 已于 2026-09-20 删除（被 tools/run.py 取代，且写死 E 盘），不再保留
     "launch_tunnel.py",        # 隧道
     "run_tunnel_daemon.py",    # 隧道
+    "tunnel_comfyui.py",       # 隧道本体（守护依赖它）
 }
 
 SCAN_EXT = {".md", ".py", ".json", ".yaml", ".yml", ".txt", ".ps1"}

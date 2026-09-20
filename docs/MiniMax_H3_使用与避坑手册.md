@@ -312,9 +312,9 @@
 | 15 | 提示词里写死数量/物件与实际不符 | 模型按文字重新分配 | 提示词里**别点名首帧里不存在的东西**（写"one large slab"而首帧有好几块 → 挂肉数量来回跳） |
 | 16 | 多视角 LoRA 不生效 | 它有**严格训练语法**：`<sks> [方位角] [仰角] [距离]`，`<sks>` 必需 | 写中文散文等于从没对它说话；另实测**只擅长方位角**，距离/仰角几乎无感 |
 | 17 | 灰底规范角色卡当身份参考无效 | 参考图压不过首帧（同 #1） | 想让资产生效，必须让资产成为**首帧的一部分** |
-| 18 | 画布 JSON 直接当 API 提交失败 | 两者格式不通用（`widgets_values` 顺序、前端专用字段） | 用转换器（`.work/comfy_api.py: to_api_prompt`），别手写 API JSON |
+| 18 | 画布 JSON 直接当 API 提交失败 | 两者格式不通用（`widgets_values` 顺序、前端专用字段） | 用 `tools/run.py`（唯一执行器，内部做转换），**别手写 API JSON** |
 | 19 | 装依赖服务器卡死 | `pip` 解析依赖去拉 2GB CUDA 版 torch | 一律 `--no-deps`，torch 借 ComfyUI 的 venv；长任务前先跑前置检查 |
-| 20 | 换电脑后素材不见了 | `*.png` / `*.mp4` / `*.wav` 被 `.gitignore` 排除 | 关键产物**强制 `git add -f`**，或在交接文档里列出本地/云端路径 |
+| 20 | 换电脑后素材不见了 | `*.png` / `*.mp4` / `*.wav` 被 `.gitignore` 排除 | **产物不进 git 是刻意的，不是 bug**：从文本层（工作流 JSON ＋ 提示词 ＋ 种子）重出。只有**不可确定性重出的**（参考片、身份基准图）才单独搬，并在项目卡的资产表里标出来（规矩.md §1 / §4） |
 | 21 | "这版画面还不如前面几版" | **一直用官方 turbo 4 步预览档**（官方原话：音频和运动质量略降）；官方模板默认是 20 步 | 拿同一 seed 跑 **20/25 步**或 **PDD 8 步**再对比；4 步产物只用来验构图/动作/台词 |
 | 22 | 用 R2V 模板却报缺少模型 | T2V/I2V 用 `fl2va`、R2V 用 `ref2va`，**两套权重** | 按第 1.1 节官方目录布局核对文件名 |
 | 23 | API 提交时参考图/参考音频**像没生效** | API 图里参考输入是**点分命名空间** `ref_images.ref_image_0` | **写裸名 `ref_image_0` 会被静默忽略**（能出片但没引用），见 §13.3 |
@@ -527,7 +527,7 @@ N/A
 **Step 6　取回**
 
 `SaveVideo` 的 `filename_prefix` 决定输出路径；用 API 跑的话：
-`.work/comfy_api.py` 的 `run_canvas_workflow()` 会自动下载到本地目录。
+`tools/run.py`（唯一执行器）会自动下载到 `projects/<项目>/outputs/`。
 
 **Step 7　验收（四查）**
 
@@ -706,7 +706,19 @@ ComfyUI 官方文档（`docs.comfy.org/tutorials/video/minimax/*`，每页都带
 | 官方 `h3-prompt-writing` skill | https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing |
 | 官方 `3d-animation-short-generator` skill | https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/3d-animation-short-generator |
 
-### 12.2 本仓库的实测证据（每条结论的原始出处）
+### 12.2 每条结论的原始出处（**证据文件在旧仓库，不在本仓库**）
+
+> ⚠️ 下表这些文件**本仓库里没有**。它们是上一条产品线的项目记录，按范式（§"只带规矩＋skill＋通用脚本＋小说"）
+> 没有带过来。要用就从 GitHub 取：
+>
+> ```bash
+> git clone https://github.com/VicotrZC/MiniMax-H3-Short-Drama.git
+> # 或只取一个文件：
+> git -C <旧仓库> show HEAD:<路径> > 本地文件
+> ```
+>
+> 所以：**本文的结论可信度分两种** —— 有出处且你能在旧仓库里核到的，是实测；
+> 核不到的，按"未经复核的说法"对待，别当既成事实用。
 
 | 文件 | 内容 |
 | --- | --- |

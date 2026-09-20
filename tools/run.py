@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """【唯一执行器】把项目里的画布工作流 JSON 跑成产物。
 
-    python tools/run.py <项目名> <工作流名> [--out 目录] [--timeout 秒]
-    python tools/run.py 买肉 SCN_01_stall_hero
-    python tools/run.py --list 买肉
+    python tools/run.py <项目名或 slug> <工作流名> [--out 目录] [--timeout 秒]
+    python tools/run.py --list meishi
+    python tools/run.py meishi SCN_stall_hero
     python tools/run.py --refresh-layout          # 联网刷新 widget 布局缓存
-    python tools/run.py 买肉 SCN_01_stall_hero --skip-gate   # 明确跳过门禁（不推荐）
+    python tools/run.py meishi SCN_stall_hero --skip-gate   # 明确跳过门禁（不推荐）
 
 范式见 `规矩.md` §2：**新任务 = 新增/修改一个工作流 JSON，不要新写 .py。**
 本文件是那"一个 py"。它取代了散落的 `make_*.py` / `nc_*.py` 生成脚本，
