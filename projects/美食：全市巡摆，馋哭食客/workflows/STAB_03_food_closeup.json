@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["一口黑色铸铁平底锅的俯视特写，锅里整齐码放着一圈生煎包，底部煎得金黄焦脆，顶部面皮白嫩饱满，撒着黑芝麻和翠绿的葱花，锅底有滋滋作响的油光和焦脆的冰花，热气正从锅里升起。一把不锈钢锅铲正铲起其中一只生煎。浅景深，焦点在最前面那只生煎上，背景虚化成一片暖色。画面中不要有任何文字。国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图。光线：清晨斜射的自然光从左上打来，热气在光线里清晰可见，油光有细腻的高光反射。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [1376, 768, 1],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260921, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/STAB_03_food_closeup"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [520, 640], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# 画风稳定性验证 03 · 食物特写\n\n**画风已定稿**：候选 I（用户 2026-09-20 选定）。\n\n- 画布 **1376×768**｜**8 步 / CFG 1.0** ＋ `Qwen-Image-2512-Lightning-8steps`\n- **画面锁定句逐字取自 `项目卡.md`**；**不带角色锁定句**（本张没有人）\n\n## 这一张要验什么\n\n食物特写是「**爽 1**」（`story/大纲.md` §五）的载体，**全剧用量最大的一类镜头**。\n生煎是主角的**第一个商品**，是第 2 集的核心画面。\n\n要回答的问题：\n\n1. 三维动画风在**纯食物、没有人**的画面里，会不会退回「照片感」？\n2. 国漫色彩高饱和的取向，用在食物上是**更诱人**还是**更假**？\n3. 焦脆、油光、热气这三个「好吃」的信号，这个画风能不能给足？\n\n## 这张为什么故意不写文字\n\n本剧的食物镜头会大量复用。**招牌文字一旦写进底图就改不动了**，\n而价格与文案在戏层还可能变（`story/世界观.md` §六 T4）。\n所以食物底图一律**不带文字**，文案走后期 —— 这样底图可复用。\n\n## 本轮三张的设计\n\n只改「每镜可变项」（光线/时间/景别），**画面锁定句一个字不动**，\n这样若有差异只能归因于场景，不能归因于画风漂移。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

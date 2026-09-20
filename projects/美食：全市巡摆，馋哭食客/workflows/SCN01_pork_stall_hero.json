@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["场景设定图：凌晨四点半的中国室内菜市场里一个猪肉摊位，**空景，画面里没有任何人**。**四分之三视角**从市场通道斜着看过去，能同时看到案台的正面和侧面，看清摊位的进深和体量。\n\n摊位结构：一条白瓷砖贴面的长条案台横置，台面上整齐摆放着几大块新鲜生猪肉和几只插着的小黄色价签；案台上方的金属横杆上用铁钩挂着一排生猪肉，肥膘白、瘦肉红；案台后面是浅色瓷砖墙，墙的正中一扇深色木门；摊位右侧的墙上挂着一长串红色香肠；摊位顶部的横梁上悬着一块红底白字的横幅，横幅下并排吊着五盏红色伞形搪瓷吊灯；案台下方地面上放着白色泡沫箱、蓝色塑料筐和两只白色塑料桶；地面是湿的水磨石，映着灯光。\n\n光线：五盏红色伞形吊灯是画面里唯一的光源，暖红的光从上方罩下来，把白瓷砖案台、挂着的肉和地面照成一片暖红；摊位外面的市场通道完全沉在黑暗里，只有极远处一两点冷白的公共照明。单一光逻辑，所有阴影都朝正下方并略向摊位内侧，软阴影、没有硬边投影。\n\n画面里没有任何人、没有文字以外的招牌、没有水印。横幅上只有 \"生鲜猪肉\" 这一处文字，其余地方不要有任何文字。\n\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [1664, 928, 4],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260925, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/SCN01_pork_stall_hero"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [560, 800], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# SCN-01 凌晨猪肉摊 · 场景主图（hero）\n\n## 范式依据（`01_资产规范.md` §二）\n\n| 要求 | 本文件 |\n|---|---|\n| **用 3/4 视角，不要正面** | ✅ 已写死「四分之三视角，能同时看到案台正面和侧面」 |\n| **单一光逻辑**：一个光源、一个阴影方向，不能两个太阳 | ✅ 五盏红灯是画面**唯一**光源；阴影统一朝下并略向内侧 |\n| 需要明确写一个**名义光源** | ✅ 已写「五盏红色伞形吊灯」并在光线段重述 |\n| **避免反射镜头** | ⚠️ 保留了湿水磨石地面（漫反射，不是镜面）；§2.2 提醒「双人机位中轴不压在水面上」，**分镜时要注意** |\n| 空景以供复用 | ✅ 画面里没有任何人 |\n\n## ⚠️ 场景设计从哪来（必须交代）\n\n**原著对摊位没有任何外形描写** —— 第2章只有「直奔卖猪肉的摊子」几个字。\n所以本图是**我按中国菜市场肉摊的常识设计的**，不是照任何参考片临摹\n（`项目卡.md` 本项目的坑 第 6 条：参考片只是对比标尺，不是设计来源）。\n\n它与已通过的买肉首帧（`FF_EP02SC01_C_guochuang_t2i_00001_.png`）**保持同一套陈设**，\n这样才能在分镜时对得上。\n\n## 规格\n\n画布 **1664×928**（1664/32=52、928/32=29，都是 32 的倍数）；\n采样 8 步 / CFG 1.0 ＋ `Qwen-Image-2512-Lightning-8steps`；`batch_size=4`。\n\n## 本场景还缺的两件（§2.1 要求）\n\n| 文件 | 内容 | 怎么做 |\n|---|---|---|\n| `SCN-01_plan.png` | **俯视平面调度图**：场地实体块／比例尺／站位点＋朝向箭头／动作轴线／**A/B 侧分界线**／机位占位点＋视锥扇形／锚点物编号 | **程序化绘制** |\n| `SCN-01_cams.png` | **机位调度图** | 程序化绘制 / 3D 截图 |\n\n⚠️ **做这两张的工具目前不存在**：`pipeline/docs/04` §八 说 `pipeline/storyboard/draw_plan.py`\n「已改 ✅」，但**新旧两个仓库里都没有这个文件**（同 `source/README.md` 说的 `index.json`，\n属「文档写了、实物没有」）。要做就得**新写一个绘图工具**，这需要用户点头（`规矩.md` §2）。\n\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

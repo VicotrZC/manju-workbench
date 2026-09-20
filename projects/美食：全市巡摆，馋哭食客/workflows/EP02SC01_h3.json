@@ -1,0 +1,168 @@
+{
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_ref2va_pruned_int8_convrot.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "LoraLoaderModelOnly", "pos": [40, 170], "size": [420, 82], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [9, 11], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 3, "type": "CLIPLoader", "pos": [40, 300], "size": [420, 106], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}],
+      "widgets_values": ["qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "minimax", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 4, "type": "VAELoader", "pos": [40, 450], "size": [420, 58], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [3, 18, 20], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_video_vae_fp16.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 5, "type": "VAELoader", "pos": [40, 550], "size": [420, 58], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [4, 19], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_audio_vae_fp32.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 6, "type": "LoadImage", "pos": [40, 650], "size": [320, 320], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [], "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5], "slot_index": 0}, {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}],
+      "widgets_values": ["mz_ff_s04.png", "image"],
+      "properties": {"Node name for S&R": "LoadImage"}
+    },
+    {
+      "id": 7, "type": "MiniMaxH3ReferenceToVideo", "pos": [520, 40], "size": [720, 340], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3},
+        {"name": "audio_vae", "type": "VAE", "link": 4},
+        {"name": "ref_images.ref_image_0", "type": "IMAGE", "link": 5}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [10], "slot_index": 0},
+        {"name": "LATENT", "type": "LATENT", "links": [16], "slot_index": 1}
+      ],
+      "widgets_values": ["subject_definitions:\n<Subject 1> is the pork stall in <Picture 1>: an indoor wet-market butcher counter at four in the morning — one long white-tiled counter lying east-west with cuts of raw pork and small yellow price cards on top, a metal bar above it with raw pork hanging from hooks, a dark wooden door in the pale tiled back wall, a string of red sausages on the east pier, five red umbrella-shaped pendant lamps in a row above the counter, white foam boxes, blue plastic crates and white buckets under the counter, and a wet terrazzo floor that reflects the red light.\n<Subject 2> is the butcher in <Picture 1>: a stocky man in his forties with a round full face, a soft kindly look, a thick short neck, short black hair cropped close to the scalp, clean-shaven, wearing a dark navy-blue short-sleeve work shirt under a dark brown waterproof apron stained with dried blood and white knife scrapes.\n<Subject 3> is the young customer in <Picture 1>: a slim young man in his early twenties with thick slightly messy short black hair, a longish face with a clean jawline and a small old scar just above the outer end of his left eyebrow, wearing a plain black crew-neck short-sleeve T-shirt, dark grey straight trousers and white low-top sneakers.\n<Picture 1> is the first frame of [Shot 1] and fixes the stall, both men, the framing and the lighting.\n\nsummary:\n[reference generation + keyframe completion] The target video is a single static medium shot inside a wet market before dawn: a young man stands at a pork counter looking at the meat while the butcher watches him from behind the counter. <Picture 1> supplies the exact opening frame. Nobody speaks in this shot; only the wet-market ambience and small cloth and foot sounds are heard.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved — the white-tiled counter, the cuts of pork, the yellow price cards, the hanging meat, the red sausages, the five red pendant lamps, the foam boxes, the blue crates, the white buckets and the wet reflective floor all stay exactly as pictured.\n<Subject 2> (appears in [Shot 1]): fully_preserved — the butcher's round kindly face, close-cropped black hair, clean-shaven chin, stocky build and brown apron over the navy shirt are retained.\n<Subject 3> (appears in [Shot 1]): fully_preserved — the young man's messy black hair, the small scar above the outer end of his left eyebrow, his black crew-neck T-shirt, dark grey trousers and white sneakers are retained.\n<Picture 1> ([Shot 1] first frame): fully_preserved — the shot opens on exactly the composition, lighting and poses shown in <Picture 1>.\n\ndetailed_description:\nThe target video is a stylised 3D animated series look: cel-flat shading layered with volumetric light, clear transparent air, saturated but not harsh colours and a clean simple composition; the characters are rendered in a cartoon style with crisp outlines, layered shadows and finely drawn features.\nGEOSPATIAL LOCK (identical in every shot of this scene): the stall sits on the NORTH side of the market aisle and FACES SOUTH, toward the aisle and the camera; x increases to the EAST, y increases to the NORTH. The counter lies east-west from x -1.5 to +1.5, y 0 to +0.8 (3.00 m long, 0.80 m deep, 0.90 m high); the pale tiled back wall runs x -1.8 to +1.8 at y +1.5 to +1.7 with one dark wooden door centred at x 0; 0.20 m thick piers stand at x +/-1.6 to +/-1.8; the string of red sausages hangs on the EAST pier at x +1.7, y +1.0; the five red pendant lamps hang in one row above the counter at y +0.4, at x -1.4, -0.7, 0, +0.7 and +1.4, all 2.40 m above the floor; the aisle beyond is y < 0 and about 3.5 m wide. <Subject 3> stands SOUTH of the counter at x -0.6, y -0.9, FACING NORTH. <Subject 2> stands NORTH of the counter at x +0.35, y +1.15, FACING SOUTH. The 180-degree axis is the line joining the two men's eyes; the camera stays on the SOUTH-EAST side of it at all times and never crosses the axis. The five red pendant lamps (about 3000 K) are the stall's ONLY light source, and the aisle behind the young man adds a faint cool spill at much lower intensity; every shadow falls almost straight down and slightly toward the back of the stall, soft-edged and low in contrast. The butcher stays on the EAST, frame-right side behind the counter and the young man stays on the WEST, frame-left side in front of it throughout; the two men never swap sides, never cross the counter, and neither man is ever duplicated or appears twice anywhere in the frame.\n[Shot 1] A static medium-close shot, camera at eye level taken from the market aisle, framed tighter than a medium shot so that only the two men from the waist up, one section of the counter and part of the hanging meat fit inside the frame with a little air above their heads. From 0.0s to 1.2s <Subject 3> stands on the left looking at the meat. From 1.2s to 3.0s he leans his upper body far forward until his nose comes close to the strip of pork belly hanging on the bar, and he sniffs it while his eyes stay on <Subject 2>. From 3.0s to 4.5s he holds that leaning pose and only breathes. From 4.5s to 6.6s he keeps leaning but pulls his head back a little, still watching <Subject 2> with a doubtful, half-convinced look. Throughout, <Subject 2> keeps one hand resting on the counter top; at about 1.0s he raises his other hand and gestures once toward the hanging pork belly, at about 2.5s he lifts his chin and lets a small, easy smile form, and then he holds both. The hanging meat stays motionless, no steam is present, and the stall layout never changes. Lighting is practical and unmoving, exactly as locked above: the five red pendant lamps are the only light on the stall, the aisle behind the young man falls away into near-darkness with a single faint cool spill far in the background, and the wet floor bounces a faint warm fill upward onto the underside of the counter. The camera does not move, pan, zoom, tilt or cut at any point. The scene is quiet: no dialogue is spoken and nobody's lips move. No subtitles, captions or on-screen text appear at any point.\n\noverall_soundscape:\nA wet market at four in the morning, very quiet: a low electrical hum from the pendant lamps, the faint drip of water onto terrazzo somewhere down the aisle, one distant metallic clatter far away. Close by, only the young man's breathing and one soft scuff of a sneaker sole on the wet floor as he shifts his weight. No voices.\n\nnon_diegetic_music:\nN/A", 1376, 768, 175, "max"],
+      "properties": {"Node name for S&R": "MiniMaxH3ReferenceToVideo"}
+    },
+    {
+      "id": 8, "type": "RandomNoise", "pos": [1280, 40], "size": [320, 82], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [], "outputs": [{"name": "NOISE", "type": "NOISE", "links": [12], "slot_index": 0}],
+      "widgets_values": [20260921, "fixed"],
+      "properties": {"Node name for S&R": "RandomNoise"}
+    },
+    {
+      "id": 9, "type": "BasicGuider", "pos": [1280, 170], "size": [320, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 9},
+        {"name": "conditioning", "type": "CONDITIONING", "link": 10}
+      ],
+      "outputs": [{"name": "GUIDER", "type": "GUIDER", "links": [13], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "BasicGuider"}
+    },
+    {
+      "id": 10, "type": "KSamplerSelect", "pos": [1280, 260], "size": [320, 58], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [], "outputs": [{"name": "SAMPLER", "type": "SAMPLER", "links": [14], "slot_index": 0}],
+      "widgets_values": ["res_multistep"],
+      "properties": {"Node name for S&R": "KSamplerSelect"}
+    },
+    {
+      "id": 11, "type": "BasicScheduler", "pos": [1280, 360], "size": [320, 106], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 11}],
+      "outputs": [{"name": "SIGMAS", "type": "SIGMAS", "links": [15], "slot_index": 0}],
+      "widgets_values": ["simple", 4, 1.0],
+      "properties": {"Node name for S&R": "BasicScheduler"}
+    },
+    {
+      "id": 12, "type": "SamplerCustomAdvanced", "pos": [1660, 40], "size": [300, 130], "flags": {}, "order": 11, "mode": 0,
+      "inputs": [
+        {"name": "noise", "type": "NOISE", "link": 12},
+        {"name": "guider", "type": "GUIDER", "link": 13},
+        {"name": "sampler", "type": "SAMPLER", "link": 14},
+        {"name": "sigmas", "type": "SIGMAS", "link": 15},
+        {"name": "latent_image", "type": "LATENT", "link": 16}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [17, 19], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "SamplerCustomAdvanced"}
+    },
+    {
+      "id": 13, "type": "VAEDecode", "pos": [1660, 220], "size": [220, 46], "flags": {}, "order": 12, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 17},
+        {"name": "vae", "type": "VAE", "link": 18}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [21], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 14, "type": "VAEDecodeAudio", "pos": [1660, 300], "size": [220, 46], "flags": {}, "order": 13, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 19},
+        {"name": "vae", "type": "VAE", "link": 20}
+      ],
+      "outputs": [{"name": "AUDIO", "type": "AUDIO", "links": [22], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecodeAudio"}
+    },
+    {
+      "id": 15, "type": "CreateVideo", "pos": [1960, 40], "size": [300, 106], "flags": {}, "order": 14, "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 21},
+        {"name": "audio", "type": "AUDIO", "link": 22}
+      ],
+      "outputs": [{"name": "VIDEO", "type": "VIDEO", "links": [23], "slot_index": 0}],
+      "widgets_values": [24.0],
+      "properties": {"Node name for S&R": "CreateVideo"}
+    },
+    {
+      "id": 16, "type": "SaveVideo", "pos": [1960, 200], "size": [420, 300], "flags": {}, "order": 15, "mode": 0,
+      "inputs": [{"name": "video", "type": "VIDEO", "link": 23}],
+      "outputs": [],
+      "widgets_values": ["meishi/EP02SC01_S04", "auto", "auto"],
+      "properties": {"Node name for S&R": "SaveVideo"}
+    },
+    {
+      "id": 17, "type": "MarkdownNote", "pos": [2420, 40], "size": [640, 820], "flags": {}, "order": 16, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# 买肉场四镜 · **H3 六段式**（可复用工作流，跑 4 次）\n\n**这个文件被跑了 4 次**，每次改四处：`LoadImage` 的首帧、六段式提示词、`length`、`SaveVideo` 前缀。\n\n## 四镜（数字来自 `storyboard/SCN01_GEO空间地图.md`）\n\n| # | 前缀 | 首帧 | 帧数 | 时长 | 内容 |\n|---|---|---|---|---|---|\n| 1 | `EP02SC01_S01` | `mz_ff_s01.png` | **175** | 7.29s | 开价：闫清看肉，摊主撑台面（当前文件状态） |\n| 2 | `EP02SC01_S02` | `mz_ff_s02.png` | **158** | 6.58s | 黑猪肉：闫清凑近闻肉，摊主抬手比肉 |\n| 3 | `EP02SC01_S03` | `mz_ff_s03.png` | **192** | 8.00s | **★ 屠宰场视频**：摊主举手机，屏幕里活猪走进屠宰场门 |\n| 4 | `EP02SC01_S04` | `mz_ff_s04.png` | **175** | 7.29s | 五十斤：闫清点头下单，摊主抄刀卸肉 |\n\n合计 **700 帧 ＝ 29.17 秒**。帧数全部落在 `17k+5` 网格。\n\n## 固定不动的部分（四镜逐字相同）\n\n- **`subject_definitions` 的三个主体定义**（换的只有 `<Picture 1>` 所描述的那一镜的画面）\n- **`detailed_description` 开头的 GEOSPATIAL LOCK 整段**（来自 `SCN01_GEO空间地图.md` §二 英文块）\n- 画风句、动机光源句、阴影方向句、防跳轴句、禁字幕句\n- 采样：**4 步**（Ref2VA 只有 4 步 LoRA）／`simple`／`res_multistep`／denoise 1.0\n- 画布 **1376×768**\n\n## 每镜必做（旧线用真实返工换来的，见 `review/旧线买肉四镜_经验与锁定.md`）\n\n1. **动作带秒数预算** —— 不给时间就会有镜头「没有落点」\n2. **首帧是什么构图，第一句就写什么构图** —— 不一致时 H3 会真的移机位并留下重复的人\n3. **显式禁字幕句** `No subtitles, captions or on-screen text appear at any point.`\n4. **无台词是避开烧字幕最稳的办法**，本四镜全部无台词\n\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "MODEL"],
+    [2, 3, 0, 7, 0, "CLIP"],
+    [3, 4, 0, 7, 1, "VAE"],
+    [4, 5, 0, 7, 2, "VAE"],
+    [5, 6, 0, 7, 3, "IMAGE"],
+    [9, 2, 0, 9, 0, "MODEL"],
+    [10, 7, 0, 9, 1, "CONDITIONING"],
+    [11, 2, 0, 11, 0, "MODEL"],
+    [12, 8, 0, 12, 0, "NOISE"],
+    [13, 9, 0, 12, 1, "GUIDER"],
+    [14, 10, 0, 12, 2, "SAMPLER"],
+    [15, 11, 0, 12, 3, "SIGMAS"],
+    [16, 7, 1, 12, 4, "LATENT"],
+    [17, 12, 0, 13, 0, "LATENT"],
+    [18, 4, 0, 13, 1, "VAE"],
+    [19, 12, 0, 14, 0, "LATENT"],
+    [20, 5, 0, 14, 1, "VAE"],
+    [21, 13, 0, 15, 0, "IMAGE"],
+    [22, 14, 0, 15, 1, "AUDIO"],
+    [23, 15, 0, 16, 0, "VIDEO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

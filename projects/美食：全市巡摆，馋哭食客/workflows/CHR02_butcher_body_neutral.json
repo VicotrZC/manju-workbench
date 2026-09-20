@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["角色设定图，一个四十岁上下的东亚中年男性，中性站姿全身像：自然直立，双臂自然垂在身体两侧，双脚与肩同宽，正面朝向镜头，表情平静，不笑，也不凶。全身从头顶到鞋底完整入画，头顶与脚下各留一点空隙，人物占画面高度约八成。\n\n体型：常年搬肉的体力活练出来的宽厚体格，肩膀厚、脖子粗、手臂粗厚有肉，肚子有肉，整体是那种看着就踏实的福相身材，不是健身房练出来的肌肉线条。\n\n五官：**面相要敦厚老实**，一看就是好说话、不会坑人的人——**脸型圆润饱满，两颊有肉，下巴圆润**；眉毛浓黑但眉形柔和顺从；**眼睛小而圆、眼角微微下垂，显得和善**；眼皮略厚，眼角有笑纹，眼神温和；瞳孔深黑褐色，瞳孔上有清晰的高光点；鼻头圆厚，鼻翼宽；嘴唇偏厚、唇色偏红；**下巴与上唇的皮肤光洁干净**；耳廓厚实；**他的右手（也就是画面左侧的那只手）虎口有一道旧刀痕**；肤色是被市场灯光和蒸汽熏出来的偏暗黄，脸上有薄薄的油光和细汗。\n\n发型：黑色短发，剪得极短、贴头皮，没有分缝，没有刘海，鬓角刚剃过。\n\n服装：深藏青色的短袖工装衬衫，厚棉斜纹布，胸前两个带翻盖的口袋，洗得发白、腋下有汗渍；外面套一件深棕色的防水围裙，帆布加涂层，正面有洗不掉的暗红血渍和刀刮的白痕，系带在腰后打了个结；黑色直筒长裤，裤脚塞进深色防水胶靴，靴面有水和油。\n\n背景是均匀的中性灰，没有任何道具、家具或环境元素；平光照明，低对比、阴影极浅、没有方向性主光，没有轮廓光，没有暗角，没有地面投影，不修图，不加颗粒。\n\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。画面中不要有任何文字、水印或台标。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [768, 1152, 4],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260924, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/CHR02_butcher_body_neutral"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [560, 780], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# CHR-02 摊主 · 中性站姿全身（资产锚点）\n\n## 原著依据（很少，所以长相是我设计的）\n\n`source/originals/002_第2章 新鲜的二师兄.md` 对他的描写只有：\n\n- 「**老板**」，卖猪肉的\n- 「我们家的猪肉可是**上好的黑猪肉**」\n- 拿手机给客人看**屠宰场门口活猪进场的视频**证明新鲜\n- 笑呵呵装肉，「末了还不忘让他多光顾自己生意」\n\n**没有再多的外形描写了。** 所以本图是**按「菜市场肉摊老板」这一类角色的常识设计的**，\n满意与否由你定。\n\n## 设计要点\n\n| 项 | 取值 | 理由 |\n|---|---|---|\n| 年龄 | 四十岁上下 | 「老板」的默认年龄，比闫清明显年长 |\n| 体型 | **敦实、肩厚、脖子粗、小臂粗壮** | 常年搬肉的体力活，不是健身房那种 |\n| 标志性特征 | **右手虎口一道旧刀痕** | `01_资产规范.md` §1.3：每个角色至少一个跨镜识别的锚 |\n| 服装 | 深藏青工装衬衫 ＋ **深棕防水围裙**（带洗不掉的暗红血渍与刀刮白痕）＋ 防水胶靴 | 肉摊摊主的实际装备；围裙是**他最好认的轮廓** |\n| 肤色 | 偏暗黄、有油光与细汗 | 市场灯光与蒸汽熏出来的 |\n\n## 规格\n\n照 `01_资产规范.md` §1.2：**中性灰底、平光、不修图**；画布 **768×1152**（32 的倍数）；\n采样 8 步 / CFG 1.0 ＋ Lightning-8steps；`batch_size=4` 出一组变体。\n\n⚠️ **与旧线的关系**：旧线有一版摊主设定（也是敦实中年男），但那是**照参考片定的**。\n本项目按「**参考片只是对比标尺、不是设计来源**」的原则（`项目卡.md` 本项目的坑 第 6 条）\n**独立设计**。两者形态相近是题材使然，不是临摹。\n\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

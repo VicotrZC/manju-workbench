@@ -1,0 +1,127 @@
+{
+  "last_node_id": 13,
+  "last_link_id": 15,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_edit_2511_fp8mixed.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 300], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [3, 6, 9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 390], "size": [420, 82], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [4], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "LoadImage", "pos": [40, 500], "size": [320, 320], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [], "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5], "slot_index": 0}, {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}],
+      "widgets_values": ["mz_C04_anchor.png", "image"],
+      "properties": {"Node name for S&R": "LoadImage"}
+    },
+    {
+      "id": 6, "type": "FluxKontextImageScale", "pos": [40, 840], "size": [320, 58], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "image", "type": "IMAGE", "link": 5}],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [7, 8], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "FluxKontextImageScale"}
+    },
+    {
+      "id": 7, "type": "TextEncodeQwenImageEditPlus", "pos": [420, 40], "size": [700, 300], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3},
+        {"name": "image1", "type": "IMAGE", "link": 7}
+      ],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [10, 11], "slot_index": 0}],
+      "widgets_values": ["把这个中年男人的服装与体型，做成一张**全身背面**的设定图：**他的背完全朝向镜头**，从背后的正后方拍摄，全身从头顶到靴底完整入画，头顶与脚下各留一点空隙，人物占画面高度约八成。**正面朝向镜头拍摄时看不到的背面细节都要画出来**：后脑勺与后颈的短发走向、工装衬衫背面的肩线与褶皱、**防水围裙在腰后打的那个结与垂下来的两条系带**、围裙背面被身体撑出的形状与其上的暗红血渍与刀刮白痕、黑色长裤的后腰与臀线、裤脚塞进防水胶靴的接缝、胶靴的后跟。姿态是自然直立，双臂自然垂在身体两侧，双脚与肩同宽，头保持正对前方不回头。\n\n发型、发色、体型（敦实、肩厚、脖子粗、肚子有肉）、肤色、服装款式与材质，都必须与 Image 1 里的同一个人**完全一致**，是同一个人的同一套衣服。\n\n背景换成均匀的中性灰，没有任何道具或环境元素；平光照明，低对比、阴影极浅、没有方向性主光、没有轮廓光、没有暗角、没有地面投影。画风与 Image 1 完全一致。画面中不要有任何文字、水印或台标。"],
+      "properties": {"Node name for S&R": "TextEncodeQwenImageEditPlus"}
+    },
+    {
+      "id": 8, "type": "ConditioningZeroOut", "pos": [420, 370], "size": [300, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [{"name": "conditioning", "type": "CONDITIONING", "link": 10}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [12], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "ConditioningZeroOut"}
+    },
+    {
+      "id": 9, "type": "VAEEncode", "pos": [420, 450], "size": [300, 46], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [
+        {"name": "pixels", "type": "IMAGE", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 6}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [13], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEEncode"}
+    },
+    {
+      "id": 10, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 4},
+        {"name": "positive", "type": "CONDITIONING", "link": 11},
+        {"name": "negative", "type": "CONDITIONING", "link": 12},
+        {"name": "latent_image", "type": "LATENT", "link": 13}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [14], "slot_index": 0}],
+      "widgets_values": [20260929, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 11, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 14},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [15], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 12, "type": "SaveImage", "pos": [1160, 420], "size": [420, 300], "flags": {}, "order": 11, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 15}],
+      "outputs": [],
+      "widgets_values": ["meishi/CHR02_body_back_full"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 13, "type": "MarkdownNote", "pos": [1900, 40], "size": [620, 700], "flags": {}, "order": 12, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# CHR-02 摊主 · 视图派生（可复用工作流）\n\n**这个文件被跑了 4 次**，每次只改三处：`LoadImage` 的参考图、`TextEncodeQwenImageEditPlus` 的提示词、`SaveImage` 的前缀。\n\n## 四次分别是\n\n| # | 前缀 | 参考图 | 视图 |\n|---|---|---|---|\n| 1 | `CHR02_head_front` | `mz_C04_anchor.png` | 头部正面（当前文件状态） |\n| 2 | `CHR02_head_three_quarter` | `mz_C04_head_front.png` | 头部四分之三侧 |\n| 3 | `CHR02_head_side` | `mz_C04_head_front.png` | 头部正侧面（纯侧） |\n| 4 | `CHR02_body_back_full` | `mz_C04_anchor.png` | 全身背面（之后走 `cut_head.py` 砍头） |\n\n**第 2、3 次的提示词**：与第 1 次同结构，只把「头部正面特写／正面朝向镜头」\n换成「四分之三侧头部特写／脸朝向画面左前方，能同时看到两只眼睛但右脸颊转开约四十五度」\n或「正侧面头部特写／脸完全转向画面右侧与镜头成九十度，画面里只能看到一只眼睛，\n鼻梁、嘴唇与下颌的侧面剪影轮廓完整清晰，耳朵完整可见」。\n\n**第 4 次的提示词**：与 `CHR01_view.json` 里那次全身背面**逐字相同**，\n只把「年轻男人」换成「中年男人」、「T恤背面」的细节描述保留。\n\n## 摊主的身份锚点\n\n**右手（画面左侧那只手）虎口一道约一厘米长的旧刀痕。**\n第一版提示词把它写成「右手虎口」时落在了左手 —— 出图后必须核对这一条。\n\n## 全身正面（无头）怎么来\n\n`CHR02_butcher_body_neutral_00009_.png` **本身就是全身正面**，\n直接走 `tools/cut_head.py` 砍头即可，**不需要再生成一次**。\n\n## 画风\n\n**edit 步不重复声明画风**，只写「画风与 Image 1 完全一致」（旧线踩出来的规矩）。\n\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 2, 0, 7, 0, "CLIP"],
+    [3, 3, 0, 7, 1, "VAE"],
+    [4, 4, 0, 10, 0, "MODEL"],
+    [5, 5, 0, 6, 0, "IMAGE"],
+    [6, 3, 0, 9, 1, "VAE"],
+    [7, 6, 0, 7, 2, "IMAGE"],
+    [8, 6, 0, 9, 0, "IMAGE"],
+    [9, 3, 0, 11, 1, "VAE"],
+    [10, 7, 0, 8, 0, "CONDITIONING"],
+    [11, 7, 0, 10, 1, "CONDITIONING"],
+    [12, 8, 0, 10, 2, "CONDITIONING"],
+    [13, 9, 0, 10, 3, "LATENT"],
+    [14, 10, 0, 11, 0, "LATENT"],
+    [15, 11, 0, 12, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

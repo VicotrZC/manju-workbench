@@ -18,6 +18,7 @@
   "FluxKontextImageScale": [],
   "FluxKontextMultiReferenceLatentMethod": ["reference_latents_method"],
   "VAEEncode": [],
+  "ConditioningZeroOut": [],
   "TextEncodeQwenImageEditPlus": ["prompt"],
   "KSampler": ["seed", null, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
   "VAEDecode": [],

@@ -1,0 +1,83 @@
+{
+  "_note": "本项目 state.json —— 机器可读状态。依据 规矩.md §1『产物哈希 + 依赖 + 审批』。仓库内此前没有已实现的 schema，故本文件为最小实现；若日后 tools/ 落地正式 schema，以正式 schema 为准并迁移本文件。",
+  "slug": "meishi",
+  "title": "美食：全市巡摆，馋哭食客",
+  "updated": "2026-09-20",
+  "layer": "story",
+  "text_layer": {
+    "source": {
+      "status": "locked_readonly",
+      "files": 50,
+      "note": "原著 50 章，只读。改它就不是同一个项目了（规矩.md §1）"
+    },
+    "story": {
+      "status": "done_pending_approval",
+      "artifacts": [
+        { "file": "story/章节索引.md", "bytes": 20991, "sha256": "420effc4caf43b575a80b3f9ca599ef35f91095d9ac741f19081390720563d62" },
+        { "file": "story/世界观.md",   "bytes": 15420, "sha256": "e73ab8290d025c1c6d0a5aa7a25bb4e44a9b833512772110f5f981d252de6ad8" },
+        { "file": "story/人物表.md",   "bytes": 14994, "sha256": "e3d20f52213acfd3b8c074dce021b40512d033171ee69072f70b949679a1c889" },
+        { "file": "story/大纲.md",     "bytes": 11365, "sha256": "de44ed5bb4f4fb23ece64db2b407cfeaae45eb09233de2c26bc881bf2c7007bc" },
+        { "file": "story/分集规划.md", "bytes": 16452, "sha256": "6e9d6284d1aa18504b7c71eb50e6ecd99385e701845f080a11e036f5c839ce22" }
+      ]
+    },
+    "script":     { "status": "not_started" },
+    "storyboard": { "status": "not_started", "blocked_by": "assets 未锁定（无图不进分镜，01_资产规范.md §〇）" },
+    "prompts":    { "status": "not_started" }
+  },
+  "provenance": {
+    "chapters_1_20": "本 AI 逐章通读原文后手写",
+    "chapters_21_50": "4 个子 agent 逐章机械抽取；已抽检第21、49章原文逐条比对一致；其余章尚未全量复核",
+    "known_risk": "子 agent 段落若要据此下镜头级决定，须先复核该章原文"
+  },
+  "approvals": {
+    "decided_on": "2026-09-20 / 21",
+    "篇幅": "先出画风候选，再定正片范围（不跑正片）",
+    "画风": "候选 I（STYLE_I_H_mature）—— 2026-09-21 用户：「画风勉强能行，先跑流程」→ 暂定，跑通后回头再调",
+    "画布": "1376×768（≈16:9，短边 768），改了旧线的 1344×768",
+    "原著无反派": "甲 · 完全忠实，不造反派",
+    "划车缺德鬼": "照原著留白但删细节",
+    "买肉场内容": "用原著第2章（凌晨四点半 ＋ 屠宰场视频那个荒诞笑点），不用参考片的下午版",
+    "买肉场首帧路线": "必须走 t2i；edit 合成会继承底图旧画风（2026-09-21 实测否决）"
+  },
+  "pipeline_status": {
+    "finished_film": {
+      "file": "outputs/EP02_SC01_买肉场_成片.mp4",
+      "spec": "h264 1376x768 24fps 700帧 29.2s + aac 32kHz stereo",
+      "shots": ["S01 175帧 开价", "S02 158帧 凑近闻肉", "S03 192帧 屠宰场视频(笑点)", "S04 175帧 下单"],
+      "agent_checks": ["机位全部未漂", "构图与各自首帧一致", "无烧字幕", "画面无乱码文字"],
+      "known_defects": ["S03 里闫清肩上多了一条围裙带（他不该穿围裙）"],
+      "verified_by_human": false,
+      "not_checked": "音频没有人听过（台词/音质需人耳）。本片全镜无台词，只有环境声。"
+    },
+    "assets_complete": {
+      "CHR-01_闫清": "5 视图齐（head_front/3q/side + body_front/back 无头）",
+      "CHR-02_摊主": "5 视图齐（同上）",
+      "SCN-01_猪肉摊": "hero + plan + cams + 9grid 四件齐",
+      "GEO空间地图": "storyboard/SCN01_GEO空间地图.md（中英双版，每镜各写一遍站位）"
+    },
+    "tools_added": ["tools/draw_plan.py（程序化平面/机位图）", "tools/cut_head.py（按头身比砍头）"]
+  },
+  "key_lesson_2026_09_21": "首帧里占了画面主体的东西，必须在 subject_definitions 与 retention_analysis 里立成主体；否则 H3 跟文字走，会丢掉那个主体并重搭场景（S03 第一版实测）",
+  "pending_decisions": [
+    { "id": "p1", "item": "画风回头再调（用户：先跑流程）", "blocking": "资产层" },
+    { "id": "p2", "item": "买肉场 S02–S04 是否补完", "blocking": "本场完整" },
+    { "id": "p3", "item": "篇幅（样片/第一季/全剧）", "blocking": "一切下游工作" },
+    { "id": "p4", "item": "人物资产分级", "blocking": "资产层工作量" },
+    { "id": "p5", "item": "一点五形态 —— 参考片里是紫蓝色发光火焰状人形（可作依据）", "blocking": "角色资产" },
+    { "id": "p6", "item": "城市名（S市/江市）", "blocking": "画面可见文字" }
+  ],
+  "hard_constraints_from_decision_4": [
+    "每一集必须引入一个新变量（六种之一），指不出来就合并、不许单独成集",
+    "爽1（食物）与爽2（食客失态）必须轮换；『好吃』这两个字每集只准说一次"
+  ],
+  "dependencies": {
+    "upstream": ["source/originals/ (50章, 只读)"],
+    "gate_before_gpu": ".work/check_before_gpu.py（跑 GPU 前必过，规矩.md §7）",
+    "executor": "tools/run.py"
+  },
+  "outputs": {
+    "note": "产物层不进 git（规矩.md §1）。重启后靠『文本层 + 工作流 JSON + 本文件哈希』重出。",
+    "assets": [],
+    "renders": []
+  }
+}

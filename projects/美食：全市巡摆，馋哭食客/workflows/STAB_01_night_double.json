@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["夜晚的大学校门口街边，一辆不锈钢烧烤餐车，餐车上的烤架上摆着成排的烤串和几只烤猪蹄，炭火发红，白烟升起。餐车后站着一个二十多岁的成年中国青年，短黑发，脸型硬朗成熟有下颌线，眼神沉稳，身材结实挺拔，穿白色T恤和深色围裙，正把烤好的串递给餐车前的一个大学生顾客；两人同框，都完整入画。背景是夜色中的街道、暖黄的路灯、远处商铺的霓虹灯牌和几棵行道树，旁边还有几个排队的年轻人。餐车招牌上写着 \"烧烤\"，画面中只出现这一处文字，其余地方不要有任何文字。国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。光线：夜市暖黄的灯串与霓虹，炭火的红光从下方打亮人物的下颌，夜色深邃。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [1376, 768, 1],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260921, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/STAB_01_night_double"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [520, 640], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# 画风稳定性验证 01 · 夜景 ＋ 双人同框\n\n**画风已定稿**：候选 I（用户 2026-09-20 选定）。\n\n- 画布 **1376×768**｜**8 步 / CFG 1.0** ＋ `Qwen-Image-2512-Lightning-8steps`\n- 画面锁定句与角色锁定句**逐字取自 `项目卡.md` 的画风锁定句**，一字未改\n\n## 这一张要验什么\n\n**画风锁在晨光场景，换到夜景还成不成立？**\n同时对上了 `02_工作规则.md` 规则九样片闸门里的两类高风险镜头：\n\n| 规则九要求 | 本张覆盖 |\n|---|---|\n| **夜景或复杂场景** | ✅ 夜晚校门口、霓虹、炭火 |\n| **双人同框** | ✅ 主角与顾客同框，且已显式写「两人同框，都完整入画」 |\n\n## 本轮三张的设计\n\n只改「每镜可变项」（光线/时间/景别），**画面锁定句与角色锁定句一个字不动**\n—— 这样若有差异，只能归因于场景，不能归因于画风漂移。\n\n| 文件 | 验什么 |\n|---|---|\n| `STAB_01_night_double` | 夜景 ＋ 双人同框 |\n| `STAB_02_system_space` | 系统空间（暗调 ＋ 发光火柴人） |\n| `STAB_03_food_closeup` | 食物特写（本剧的「爽 1」） |\n\n⚠️ 中文招牌渲染仍不可靠（A—I 九张都没渲干净）—— 这是**独立待解决问题**，\n不要把它的失败误读成画风不稳。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

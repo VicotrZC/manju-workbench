@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["角色设定图，一个二十多岁的成年中国男性，中性站姿全身像：自然直立，双臂自然垂在身体两侧，双脚与肩同宽，正面朝向镜头，表情平静，不笑。全身从头顶到鞋底完整入画，头顶与脚下各留一点空隙，人物占画面高度约八成。\n\n五官：脸型偏长，下颌线清晰利落；眉毛自然浓密、平直；眼睛狭长有神，双眼皮折痕自然，眼窝不深；瞳孔是深黑褐色，瞳孔上有清晰的高光点；鼻梁挺直，山根清晰；嘴唇偏薄，唇色自然偏淡；下颌折角分明；耳廓正常，耳垂适中；左眉尾有一道很浅的陈旧小疤；肤色是健康偏白的黄种人肤色，面部肌肉平整干净。\n\n发型：黑色短发，发量厚实、蓬松微乱，自然碎的刘海垂在额前。\n\n服装：纯黑色圆领短袖T恤，棉质针织，表面有细密罗纹，垂坠自然、略有洗旧的柔软感；深灰色直筒长裤，斜纹布，膝盖与裤脚有轻微自然磨损；白色低帮帆布运动鞋，橡胶鞋头，鞋面有穿旧的浅灰痕迹。体型清瘦挺拔，肩膀不宽但坐得直，手臂有常年干活留下的结实线条。\n\n背景是均匀的中性灰，没有任何道具、家具或环境元素；平光照明，低对比、阴影极浅、没有方向性主光，没有轮廓光，没有暗角，没有地面投影，不修图，不加颗粒。\n\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。画面中不要有任何文字、水印或台标。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [768, 1152, 4],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260923, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/CHR01_body_neutral"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [560, 780], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# CHR-01 闫清 · 中性站姿全身（资产锚点）\n\n## 这一步在范式里的位置\n\n`01_资产规范.md` §6.1 原文：\n「**新项目没有历史资产时，先用纯文生图出一张\"中性站姿全身\"，再以它为参考逐角度派生。**」\n\n所以**本图是后续 5 视图与表情差分的锚**，不是最终交付件。\n\n## 规格（照 `01_资产规范.md` §1.2）\n\n| 项 | 要求 | 本文件 |\n|---|---|---|\n| 背景 | **中性灰**（≈#808080），**不要纯白** | ✅ 均匀中性灰 |\n| 光 | **平光**，低对比、阴影极浅、无方向性主光/轮廓光 | ✅ 已写死 |\n| 后处理 | **不修图**：无颗粒、无暗角、无电影调色 | ✅ 已写死 |\n| 画布 | 32 的倍数 | **768×1152**（768/32=24、1152/32=36） |\n| 采样 | 8 步 / CFG 1.0 ＋ Lightning-8steps | ✅ |\n\n## 五官 10 项（§1.3 必写 —— 逐项对应）\n\n脸型骨相 ／ 眉形 ／ 眼型与眼窝 ／ 瞳色与反光 ／ 鼻梁山根 ／ 唇形唇色 ／\n下颌线与折角 ／ 耳廓耳型 ／ **标志性特征** ／ 面部肌肉与肤色\n\n→ **标志性特征给了「左眉尾一道很浅的陈旧小疤」**（§1.3：没有锚点的脸，换个角度就认不出是同一个人）。\n→ **瞳孔高光点已显式要求**（§1.3：默认为「死眼」）。\n→ 服装材质 6 项（§1.4）也已逐项写死（面料／纹理／垂坠／做旧／鞋面／缝纫）。\n\n## ⚠️ 两处要你判断的事\n\n1. **长相**：原著只写「长得好、个儿也高、身材很不错」，没有具体长相。\n   **所以这张脸是我按这些线索设计的，满意与否由你定。**\n   一次出 4 张变体（`batch_size=4`），你挑一张，或说改哪里。\n2. **服装**：原著**没有写闫清的常服**（只写过拍戏时的破烂戏服）。\n   我用的是「黑色圆领T恤＋深灰直筒长裤＋白色低帮帆布鞋」——\n   理由是他是穷过的群演，这是最省事也最不出错的一套。**要换的话说一声。**\n\n## ⚠️ 与旧线的有意偏离\n\n旧线把角色卡做成「参考片原帧裁剪」以锁身份。**本项目不用那条路**：\n参考片只是**对比标尺**，不是设计来源（`项目卡.md` 本项目的坑 第 6 条）。\n→ 本项目的角色长相**由小说线索 ＋ 候选 I 画风重新设计**。\n\n⚠️ 提示词里不许出现「」和《》（会被画进画面）。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

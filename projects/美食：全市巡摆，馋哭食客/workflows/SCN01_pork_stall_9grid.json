@@ -1,0 +1,101 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "CLIPLoader", "pos": [40, 170], "size": [420, 106], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+      "widgets_values": ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 3, "type": "VAELoader", "pos": [40, 324], "size": [420, 58], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+      "widgets_values": ["qwen_image_vae.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 4, "type": "LoraLoaderModelOnly", "pos": [40, 430], "size": [420, 82], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+      "widgets_values": ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 5, "type": "CLIPTextEncode", "pos": [500, 40], "size": [620, 300], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+      "widgets_values": ["一张场景多角度参考图：画面被整齐地切成 **3 行 3 列共九个等大的格子**，格子之间**没有边框、没有留白、没有分隔线**，九格严丝合缝拼满整张图。**九个格子里是同一个菜市场猪肉摊，陈设、材质、灯光完全一致，只有机位角度不同。**\n\n这个摊位是：凌晨四点半的中国室内菜市场里一个猪肉摊。一条白瓷砖贴面的长条案台横置，台面上整齐摆放着几大块新鲜生猪肉和几只插着的小黄色价签；案台上方的金属横杆上用铁钩挂着一排生猪肉；案台后面是浅色瓷砖墙，墙正中一扇深色木门；摊位右侧墙上挂着一长串红色香肠；摊位顶部横梁上悬着一块红底白字横幅，横幅下并排吊着五盏红色伞形搪瓷吊灯；案台下方地面上放着白色泡沫箱、蓝色塑料筐和两只白色塑料桶；地面是湿的水磨石。五盏红色吊灯是这个摊位唯一的光源，暖红的光把白瓷砖、挂肉和地面照成一片暖红；摊位外的市场通道沉在黑暗里。\n\n九个格子分别是：\n第一行左：从通道正对摊位的**正面**平视；\n第一行中：从**左前方四分之三**角度看向摊位；\n第一行右：从**右前方四分之三**角度看向摊位；\n第二行左：从**摊位正左侧（西侧）**沿案台方向看过去；\n第二行中：从**摊位正右侧（东侧）**沿案台方向看过去；\n第二行右：从**高处俯视**整个摊位与案台；\n第三行左：从**低角度**贴近案台台面往上看；\n第三行中：**站在案台后面（摊主位置）朝通道方向**看；\n第三行右：**拉远的全景**，把整个摊位、案台与市场通道都收进画面。\n\n每个格子里摊位顶部的横幅上都写着 \"生鲜猪肉\" 四个红底白字，九个格子里只有这一处文字，其余地方不要有任何文字、水印、台标或格号。\n\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图。"],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 6, "type": "CLIPTextEncode", "pos": [500, 370], "size": [620, 120], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+      "widgets_values": [""],
+      "properties": {"Node name for S&R": "CLIPTextEncode"}
+    },
+    {
+      "id": 7, "type": "EmptySD3LatentImage", "pos": [500, 520], "size": [420, 106], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+      "widgets_values": [1920, 1152, 2],
+      "properties": {"Node name for S&R": "EmptySD3LatentImage"}
+    },
+    {
+      "id": 8, "type": "KSampler", "pos": [1160, 40], "size": [320, 262], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 2},
+        {"name": "positive", "type": "CONDITIONING", "link": 5},
+        {"name": "negative", "type": "CONDITIONING", "link": 6},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+      "widgets_values": [20260926, "fixed", 8, 1.0, "euler", "simple", 1.0],
+      "properties": {"Node name for S&R": "KSampler"}
+    },
+    {
+      "id": 9, "type": "VAEDecode", "pos": [1160, 340], "size": [220, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 8},
+        {"name": "vae", "type": "VAE", "link": 9}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 10, "type": "SaveImage", "pos": [1160, 420], "size": [420, 400], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 10}],
+      "outputs": [],
+      "widgets_values": ["meishi/SCN01_pork_stall_9grid"],
+      "properties": {"Node name for S&R": "SaveImage"}
+    },
+    {
+      "id": 11, "type": "MarkdownNote", "pos": [1620, 40], "size": [580, 820], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# SCN-01 凌晨猪肉摊 · **九宫格**（锁几何的那一件）\n\n## 为什么必须有这一张\n\n用户 2026-09-21 指出：**场景部分角度不一致**，问「这个你后期调整吗」。\n\n**答案是：后期调不了。** 后期只能做调色、去暗角、拉平光比；\n「不同镜头里摊位长得不一样」是**生成期**就写死了的，**像素级救不回来**。\n\n**正确修法就是这一张**：`01_资产规范.md` §二 的场景三件套里，\n九宫格负责**从九个角度定义陈设与布局**。\n旧线的 H3 提示词把它写成 `<Picture 4>`，原文定义是：\n\n> `<Picture 4> defines the set dressing and the layout of <Subject 1> from nine angles;\n>  it does not dictate the framing of [Shot 1].`\n\n→ **它管陈设与布局，不管取景。** 每一条 H3 提示词都带它，几何就锁住了。\n\n## 与另外两张的分工\n\n| 文件 | 管什么 |\n|---|---|\n| `SCN-01_hero.png` | **观感基准**（本项目由 t2i 出，见 `SCN01_pork_stall_hero.json`） |\n| `SCN-01_9grid.png` | **几何与陈设基准**（本文件）→ 进 H3 当 `<Picture 4>` |\n| `SCN-01_plan.png` / `_cams.png` | **米数与角度基准**（`tools/draw_plan.py` 程序化绘制） |\n\n三张一起，几何才在三处对得上：**图纸、九宫格、提示词文字**。\n\n## 九格分别是哪九个角度（与提示词逐条对应）\n\n正面 ／ 左前四分之三 ／ 右前四分之三\n正左 ／ 正右 ／ 高角度俯视\n低角度贴近台面 ／ 案台后方朝通道 ／ 拉远全景\n\n## 规格\n\n| 项 | 值 |\n|---|---|\n| 画布 | **1920×1152**（1920/32=60、1152/32=36，都是 32 的倍数） |\n| 格子 | 3×3 等大，每格 **640×384**（5:3，贴近本项目 1376×768 的画幅） |\n| 采样 | 8 步 / CFG 1.0 ＋ `Qwen-Image-2512-Lightning-8steps` |\n| batch | 2（出两张挑） |\n\n⚠️ 陈设描述与 `SCN01_pork_stall_hero.json` **逐字一致**，否则两张对不上。\n⚠️ 画面文字只有每个格子的横幅 \"生鲜猪肉\"，已逐个列出。\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 4, 0, 8, 0, "MODEL"],
+    [3, 2, 0, 5, 0, "CLIP"],
+    [4, 2, 0, 6, 0, "CLIP"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"],
+    [10, 9, 0, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

@@ -1,0 +1,168 @@
+{
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1, "type": "UNETLoader", "pos": [40, 40], "size": [420, 82], "flags": {}, "order": 0, "mode": 0,
+      "inputs": [], "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_ref2va_pruned_int8_convrot.safetensors", "default"],
+      "properties": {"Node name for S&R": "UNETLoader"}
+    },
+    {
+      "id": 2, "type": "LoraLoaderModelOnly", "pos": [40, 170], "size": [420, 82], "flags": {}, "order": 1, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [9, 11], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors", 1.0],
+      "properties": {"Node name for S&R": "LoraLoaderModelOnly"}
+    },
+    {
+      "id": 3, "type": "CLIPLoader", "pos": [40, 300], "size": [420, 106], "flags": {}, "order": 2, "mode": 0,
+      "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}],
+      "widgets_values": ["qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "minimax", "default"],
+      "properties": {"Node name for S&R": "CLIPLoader"}
+    },
+    {
+      "id": 4, "type": "VAELoader", "pos": [40, 450], "size": [420, 58], "flags": {}, "order": 3, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [3, 18, 20], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_video_vae_fp16.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 5, "type": "VAELoader", "pos": [40, 550], "size": [420, 58], "flags": {}, "order": 4, "mode": 0,
+      "inputs": [], "outputs": [{"name": "VAE", "type": "VAE", "links": [4, 19], "slot_index": 0}],
+      "widgets_values": ["minimax_h3_audio_vae_fp32.safetensors"],
+      "properties": {"Node name for S&R": "VAELoader"}
+    },
+    {
+      "id": 6, "type": "LoadImage", "pos": [40, 650], "size": [320, 320], "flags": {}, "order": 5, "mode": 0,
+      "inputs": [], "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [5], "slot_index": 0}, {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}],
+      "widgets_values": ["mz_ff_s03.png", "image"],
+      "properties": {"Node name for S&R": "LoadImage"}
+    },
+    {
+      "id": 7, "type": "MiniMaxH3ReferenceToVideo", "pos": [520, 40], "size": [720, 340], "flags": {}, "order": 6, "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3},
+        {"name": "audio_vae", "type": "VAE", "link": 4},
+        {"name": "ref_images.ref_image_0", "type": "IMAGE", "link": 5}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [10], "slot_index": 0},
+        {"name": "LATENT", "type": "LATENT", "links": [16], "slot_index": 1}
+      ],
+      "widgets_values": ["subject_definitions:\n<Subject 1> is the smartphone held up in the centre of <Picture 1>: a black rectangular phone held in a man's thick hand, its lit screen turned square to the camera and filling the middle of the frame. A video is playing on that screen: a truck parked in front of a slaughterhouse with its rear doors open, and several pink live pigs walking down out of the truck box and one after another passing between two grey concrete gate posts into the building. The pigs, the truck and the gate are all clearly visible on the screen.\n<Subject 2> is the butcher in <Picture 1>: a stocky man in his forties with a round full face, a soft kindly look, a thick short neck, short black hair cropped close to the scalp, clean-shaven, wearing a dark navy-blue short-sleeve work shirt under a dark brown waterproof apron; only his face above the phone and the hand and forearm holding the phone are in frame.\n<Subject 3> is the young customer in <Picture 1>: a slim young man in his early twenties with thick slightly messy short black hair, a longish face with a clean jawline and a small old scar just above the outer end of his left eyebrow, wearing a plain black crew-neck short-sleeve T-shirt; his face fills the left side of the frame and he stares at the phone screen with wide eyes.\n<Subject 4> is the pork stall in <Picture 1>, almost entirely thrown out of focus behind the phone: a white-tiled butcher counter with raw pork on it, raw pork hanging from a bar, a string of red sausages, and five red umbrella-shaped pendant lamps above, all reduced to a soft warm red blur.\n<Picture 1> is the first frame of [Shot 1] and fixes the phone, the video on its screen, both men's faces and the framing.\n\nsummary:\n[reference generation + keyframe completion] The target video is a single static close shot inside a wet market before dawn: the butcher holds his smartphone up to the young customer's face so he can watch a video on it, and the video keeps playing while the young man stares at it. <Picture 1> supplies the exact opening frame: the phone with its lit screen in the centre, the young man's startled face on the left and the butcher's face above the phone. The shot is about the phone and the video playing on it; the phone stays in frame and the video keeps running for the whole shot. Nobody speaks; only the wet-market ambience and quiet breathing are heard.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - the phone stays held up in the centre of the frame with its screen turned to the camera for the whole shot and the video on it keeps playing; the truck, the open rear doors, the pink pigs and the two grey gate posts stay exactly as pictured.\n<Subject 2> (appears in [Shot 1]): fully_preserved - the butcher's round kindly face above the phone, his close-cropped black hair, clean-shaven chin, and the hand and forearm holding the phone are retained.\n<Subject 3> (appears in [Shot 1]): fully_preserved - the young man's messy black hair, the small scar above the outer end of his left eyebrow, his black crew-neck T-shirt and his startled wide-eyed expression are retained.\n<Subject 4> (appears in [Shot 1]): fully_preserved - the stall stays a soft warm red blur in the background, never becomes sharp and never moves forward; no new stall furniture, no glass display case and no wall pan enters the frame.\n<Picture 1> ([Shot 1] first frame): fully_preserved - the shot opens on exactly the composition, lighting and poses shown in <Picture 1>.\n\ndetailed_description:\nThe target video is a stylised 3D animated series look: cel-flat shading layered with volumetric light, clear transparent air, saturated but not harsh colours and a clean simple composition; the characters are rendered in a cartoon style with crisp outlines, layered shadows and finely drawn features.\nGEOSPATIAL LOCK (identical in every shot of this scene): the stall sits on the NORTH side of the market aisle and FACES SOUTH, toward the aisle and the camera; x increases to the EAST, y increases to the NORTH. The counter lies east-west from x -1.5 to +1.5, y 0 to +0.8; the pale tiled back wall runs x -1.8 to +1.8 at y +1.5 to +1.7 with one dark wooden door centred at x 0; the string of red sausages hangs on the EAST pier at x +1.7, y +1.0; the five red pendant lamps hang in one row above the counter at y +0.4 at x -1.4, -0.7, 0, +0.7 and +1.4, all 2.40 m above the floor; the aisle beyond is y < 0 and about 3.5 m wide. <Subject 3> stands SOUTH of the counter at x -0.6, y -0.9, FACING NORTH. <Subject 2> stands NORTH of the counter at x +0.35, y +1.15, FACING SOUTH. The 180-degree axis is the line joining the two men's eyes; the camera stays on the SOUTH-EAST side of it at all times and never crosses the axis. The five red pendant lamps (about 3000 K) are the stall's ONLY light source; every shadow falls almost straight down and slightly toward the back of the stall, soft-edged and low in contrast. The butcher stays on the EAST, frame-right side behind the counter and the young man stays on the WEST, frame-left side in front of it throughout; the two men never swap sides, never cross the counter, and neither man is ever duplicated or appears twice anywhere in the frame.\n[Shot 1] A static close shot, camera at eye level, framed tight so that the butcher's hand holding the smartphone fills the centre of the frame with the lit screen turned square to the camera, the young man's face filling the left side of the frame and the butcher's face showing just above the top edge of the phone; the stall behind is out of focus. The phone and the video on its screen are present from the very first frame and stay in frame for the entire shot. That video keeps running for the whole shot: pink live pigs walk down the ramp out of the open truck box and one after another pass between the two grey concrete gate posts into the slaughterhouse, their bodies swaying as they walk, while the truck and the gate stay fixed behind them. From 0.0s to 2.0s <Subject 3> stares at the screen with wide eyes and only breathes. From 2.0s to 3.5s he leans in a little closer to the screen and his eyes widen a fraction more. From 3.5s to 8.0s he holds that pose and blinks once at about 5.0s with his mouth slightly open, while <Subject 2> keeps the phone steady with only a very slight tremor in his hand and a small warm smile on his face. Lighting is practical and unmoving: the lit phone screen throws a soft cool glow onto the young man's face, and the five red pendant lamps stay a warm red blur behind him. The camera does not move, pan, zoom, tilt or cut at any point. The scene is quiet: no dialogue is spoken and nobody's lips move. No subtitles, captions or on-screen text appear at any point other than the moving video image on the phone screen.\n\noverall_soundscape:\nA wet market before dawn, very quiet: a low electrical hum, one distant drip of water onto terrazzo and a faint metallic clatter far away. Close by, only two men breathing and the small tinny rattle of the phone speaker playing a muffled video. No voices, no music.\n\nnon_diegetic_music:\nN/A", 1376, 768, 192, "max"],
+      "properties": {"Node name for S&R": "MiniMaxH3ReferenceToVideo"}
+    },
+    {
+      "id": 8, "type": "RandomNoise", "pos": [1280, 40], "size": [320, 82], "flags": {}, "order": 7, "mode": 0,
+      "inputs": [], "outputs": [{"name": "NOISE", "type": "NOISE", "links": [12], "slot_index": 0}],
+      "widgets_values": [20260922, "fixed"],
+      "properties": {"Node name for S&R": "RandomNoise"}
+    },
+    {
+      "id": 9, "type": "BasicGuider", "pos": [1280, 170], "size": [320, 46], "flags": {}, "order": 8, "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 9},
+        {"name": "conditioning", "type": "CONDITIONING", "link": 10}
+      ],
+      "outputs": [{"name": "GUIDER", "type": "GUIDER", "links": [13], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "BasicGuider"}
+    },
+    {
+      "id": 10, "type": "KSamplerSelect", "pos": [1280, 260], "size": [320, 58], "flags": {}, "order": 9, "mode": 0,
+      "inputs": [], "outputs": [{"name": "SAMPLER", "type": "SAMPLER", "links": [14], "slot_index": 0}],
+      "widgets_values": ["res_multistep"],
+      "properties": {"Node name for S&R": "KSamplerSelect"}
+    },
+    {
+      "id": 11, "type": "BasicScheduler", "pos": [1280, 360], "size": [320, 106], "flags": {}, "order": 10, "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": 11}],
+      "outputs": [{"name": "SIGMAS", "type": "SIGMAS", "links": [15], "slot_index": 0}],
+      "widgets_values": ["simple", 4, 1.0],
+      "properties": {"Node name for S&R": "BasicScheduler"}
+    },
+    {
+      "id": 12, "type": "SamplerCustomAdvanced", "pos": [1660, 40], "size": [300, 130], "flags": {}, "order": 11, "mode": 0,
+      "inputs": [
+        {"name": "noise", "type": "NOISE", "link": 12},
+        {"name": "guider", "type": "GUIDER", "link": 13},
+        {"name": "sampler", "type": "SAMPLER", "link": 14},
+        {"name": "sigmas", "type": "SIGMAS", "link": 15},
+        {"name": "latent_image", "type": "LATENT", "link": 16}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [17, 19], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "SamplerCustomAdvanced"}
+    },
+    {
+      "id": 13, "type": "VAEDecode", "pos": [1660, 220], "size": [220, 46], "flags": {}, "order": 12, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 17},
+        {"name": "vae", "type": "VAE", "link": 18}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [21], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 14, "type": "VAEDecodeAudio", "pos": [1660, 300], "size": [220, 46], "flags": {}, "order": 13, "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 19},
+        {"name": "vae", "type": "VAE", "link": 20}
+      ],
+      "outputs": [{"name": "AUDIO", "type": "AUDIO", "links": [22], "slot_index": 0}],
+      "widgets_values": [],
+      "properties": {"Node name for S&R": "VAEDecodeAudio"}
+    },
+    {
+      "id": 15, "type": "CreateVideo", "pos": [1960, 40], "size": [300, 106], "flags": {}, "order": 14, "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 21},
+        {"name": "audio", "type": "AUDIO", "link": 22}
+      ],
+      "outputs": [{"name": "VIDEO", "type": "VIDEO", "links": [23], "slot_index": 0}],
+      "widgets_values": [24.0],
+      "properties": {"Node name for S&R": "CreateVideo"}
+    },
+    {
+      "id": 16, "type": "SaveVideo", "pos": [1960, 200], "size": [420, 300], "flags": {}, "order": 15, "mode": 0,
+      "inputs": [{"name": "video", "type": "VIDEO", "link": 23}],
+      "outputs": [],
+      "widgets_values": ["meishi/EP02SC01_S03_v2", "auto", "auto"],
+      "properties": {"Node name for S&R": "SaveVideo"}
+    },
+    {
+      "id": 17, "type": "MarkdownNote", "pos": [2420, 40], "size": [680, 900], "flags": {}, "order": 16, "mode": 0,
+      "inputs": [], "outputs": [],
+      "widgets_values": ["# EP02-SC01-S03 · **重做版**（承重笑点那一镜）\n\n## 第一版为什么废了（本项目实测，必须记住）\n\n**现象**：成片里手机**完全不见了**；H3 还**换了一个摊子** —— 多出玻璃展示柜、墙上多了挂锅、布局全变；机位从大特写退成中景双人，摊主空着手比划。\n\n**根因**：我给这一镜的六段式**只在文字里写了「摊位 ＋ 两个人」，没有把手机和屏幕上的视频立成主体**，而首帧是被手机占满的。\n首帧与文字冲突时，**H3 跟文字走** —— 丢掉手机，并按文字重新搭了一个摊子。\n\n> 这是旧线 5.11 条的同一个病。旧线那条只写了「**首帧是什么构图，第一句就必须写什么构图**」；\n> **本镜补上另一半：首帧里占了画面主体的东西，必须在 `subject_definitions` 与 `retention_analysis` 里立成主体。**\n\n## 本版相对第一版改了什么\n\n| 项 | 第一版 | **本版** |\n|---|---|---|\n| `<Subject 1>` | 猪肉摊 | **手机 ＋ 屏幕上的视频**（卡车、敞开的厢门、粉色的猪、两根水泥门柱） |\n| 摊位 | `<Subject 1>` | 降为 `<Subject 4>`，并写明**必须一直是虚化暖红背景**、不许变清晰、**不许有新家具（点名玻璃展示柜与挂锅）进画** |\n| `retention_analysis` | 没提手机 | 手机列第一条，写明**整镜保持在画面中心、屏幕持续播放** |\n| 摊主 | 全身 | 只留「手机上方的脸」＋「举手机的手与前臂」 |\n| 禁字幕句 | 绝对禁止一切文字 | 加例外：**手机屏幕上那段视频画面不算文字** |\n\n## 固定不动\n\n- GEOSPATIAL LOCK 整段照抄 `storyboard/SCN01_GEO空间地图.md` §二\n- 画风句、动机光源句、阴影方向句、防跳轴句\n- 采样 **4 步**（Ref2VA 只有 4 步 LoRA）／`simple`／`res_multistep`／denoise 1.0\n- 画布 **1376×768**；**192 帧**（`17×11+5` ＝ 8.00s）\n- 全镜无台词（避开烧字幕最稳的办法）\n\n## 单独建文件的原因\n\n第一版的内容已被本文件取代，但**第一版的教训留在上面这张表里**，不许删。\n`EP02SC01_h3.json` 那个可复用模板最后一次跑的是 S04，其便签里记着四镜的完整分工。\n\n⚠️ 提示词里不许出现「」和《》。"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "MODEL"],
+    [2, 3, 0, 7, 0, "CLIP"],
+    [3, 4, 0, 7, 1, "VAE"],
+    [4, 5, 0, 7, 2, "VAE"],
+    [5, 6, 0, 7, 3, "IMAGE"],
+    [9, 2, 0, 9, 0, "MODEL"],
+    [10, 7, 0, 9, 1, "CONDITIONING"],
+    [11, 2, 0, 11, 0, "MODEL"],
+    [12, 8, 0, 12, 0, "NOISE"],
+    [13, 9, 0, 12, 1, "GUIDER"],
+    [14, 10, 0, 12, 2, "SAMPLER"],
+    [15, 11, 0, 12, 3, "SIGMAS"],
+    [16, 7, 1, 12, 4, "LATENT"],
+    [17, 12, 0, 13, 0, "LATENT"],
+    [18, 4, 0, 13, 1, "VAE"],
+    [19, 12, 0, 14, 0, "LATENT"],
+    [20, 5, 0, 14, 1, "VAE"],
+    [21, 13, 0, 15, 0, "IMAGE"],
+    [22, 14, 0, 15, 1, "AUDIO"],
+    [23, 15, 0, 16, 0, "VIDEO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

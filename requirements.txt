@@ -1,3 +1,8 @@
 # 通用工具的第三方依赖。尽量保持最小。
 # 实测：.work/ 下的通用工具里，只有 run.py 需要 paramiko（远程 SSH/SFTP），其余全是标准库。
 paramiko>=3.0
+
+# 2026-09-21 新增：tools/draw_plan.py（程序化绘制场景平面调度图 / 机位调度图）
+# 依据 pipeline/docs/01_资产规范.md §2.1 —— 平面图上必须有精确米数与角度，
+# 只能程序化绘制，不能生成。新机器 clone 后要 pip install 这一项才能出图。
+matplotlib>=3.7
