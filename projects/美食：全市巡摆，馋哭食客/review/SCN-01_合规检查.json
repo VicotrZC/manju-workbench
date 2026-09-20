@@ -1,0 +1,231 @@
+{
+  "_note": "S9 合规检查记录。**机械项由 `pipeline.py qc` 填；语义项必须由 agent 或用户填，程序不猜。**改动本文件后重新跑 `pipeline.py gate <项目> S9` 复核。",
+  "scene": "SCN-01",
+  "checked_at": "2026-09-20T23:11:37",
+  "canvas": [
+    1376,
+    768
+  ],
+  "fps": 24,
+  "checks": [
+    {
+      "shot": "S01",
+      "item": "采用版本",
+      "expect": "一镜一版",
+      "got": "EP02SC01_S01_00002_.mp4／EP02SC01_S01_00001_.mp4",
+      "result": "fail",
+      "detail": "同一镜有多个产物；下面核的是最新那个（按 mtime）。**哪一版是采用的必须由人写下来**，程序不替人选"
+    },
+    {
+      "shot": "S01",
+      "item": "画布",
+      "expect": "1376×768",
+      "got": "1376×768",
+      "result": "pass",
+      "file": "EP02SC01_S01_00002_.mp4"
+    },
+    {
+      "shot": "S01",
+      "item": "帧数",
+      "expect": 175,
+      "got": 175,
+      "result": "pass",
+      "file": "EP02SC01_S01_00002_.mp4"
+    },
+    {
+      "shot": "S01",
+      "item": "时长",
+      "expect": "7.29s",
+      "got": "7.292s",
+      "result": "pass",
+      "file": "EP02SC01_S01_00002_.mp4"
+    },
+    {
+      "shot": "S01",
+      "item": "帧率",
+      "expect": "24",
+      "got": "23.999",
+      "result": "pass",
+      "file": "EP02SC01_S01_00002_.mp4"
+    },
+    {
+      "shot": "S01",
+      "item": "音轨",
+      "expect": "有音轨（H3 原生 32kHz 立体声）",
+      "got": "mp4a 32000Hz 2ch",
+      "result": "pass",
+      "file": "EP02SC01_S01_00002_.mp4"
+    },
+    {
+      "shot": "S02",
+      "item": "画布",
+      "expect": "1376×768",
+      "got": "1376×768",
+      "result": "pass",
+      "file": "EP02SC01_S02_00001_.mp4"
+    },
+    {
+      "shot": "S02",
+      "item": "帧数",
+      "expect": 158,
+      "got": 158,
+      "result": "pass",
+      "file": "EP02SC01_S02_00001_.mp4"
+    },
+    {
+      "shot": "S02",
+      "item": "时长",
+      "expect": "6.58s",
+      "got": "6.584s",
+      "result": "pass",
+      "file": "EP02SC01_S02_00001_.mp4"
+    },
+    {
+      "shot": "S02",
+      "item": "帧率",
+      "expect": "24",
+      "got": "23.998",
+      "result": "pass",
+      "file": "EP02SC01_S02_00001_.mp4"
+    },
+    {
+      "shot": "S02",
+      "item": "音轨",
+      "expect": "有音轨（H3 原生 32kHz 立体声）",
+      "got": "mp4a 32000Hz 2ch",
+      "result": "pass",
+      "file": "EP02SC01_S02_00001_.mp4"
+    },
+    {
+      "shot": "S03",
+      "item": "采用版本",
+      "expect": "一镜一版",
+      "got": "EP02SC01_S03_v2_00001_.mp4／EP02SC01_S03_00001_.mp4",
+      "result": "fail",
+      "detail": "同一镜有多个产物；下面核的是最新那个（按 mtime）。**哪一版是采用的必须由人写下来**，程序不替人选"
+    },
+    {
+      "shot": "S03",
+      "item": "画布",
+      "expect": "1376×768",
+      "got": "1376×768",
+      "result": "pass",
+      "file": "EP02SC01_S03_v2_00001_.mp4"
+    },
+    {
+      "shot": "S03",
+      "item": "帧数",
+      "expect": 192,
+      "got": 192,
+      "result": "pass",
+      "file": "EP02SC01_S03_v2_00001_.mp4"
+    },
+    {
+      "shot": "S03",
+      "item": "时长",
+      "expect": "8.0s",
+      "got": "8.0s",
+      "result": "pass",
+      "file": "EP02SC01_S03_v2_00001_.mp4"
+    },
+    {
+      "shot": "S03",
+      "item": "帧率",
+      "expect": "24",
+      "got": "24.0",
+      "result": "pass",
+      "file": "EP02SC01_S03_v2_00001_.mp4"
+    },
+    {
+      "shot": "S03",
+      "item": "音轨",
+      "expect": "有音轨（H3 原生 32kHz 立体声）",
+      "got": "mp4a 32000Hz 2ch",
+      "result": "pass",
+      "file": "EP02SC01_S03_v2_00001_.mp4"
+    },
+    {
+      "shot": "S04",
+      "item": "画布",
+      "expect": "1376×768",
+      "got": "1376×768",
+      "result": "pass",
+      "file": "EP02SC01_S04_00001_.mp4"
+    },
+    {
+      "shot": "S04",
+      "item": "帧数",
+      "expect": 175,
+      "got": 175,
+      "result": "pass",
+      "file": "EP02SC01_S04_00001_.mp4"
+    },
+    {
+      "shot": "S04",
+      "item": "时长",
+      "expect": "7.29s",
+      "got": "7.292s",
+      "result": "pass",
+      "file": "EP02SC01_S04_00001_.mp4"
+    },
+    {
+      "shot": "S04",
+      "item": "帧率",
+      "expect": "24",
+      "got": "23.999",
+      "result": "pass",
+      "file": "EP02SC01_S04_00001_.mp4"
+    },
+    {
+      "shot": "S04",
+      "item": "音轨",
+      "expect": "有音轨（H3 原生 32kHz 立体声）",
+      "got": "mp4a 32000Hz 2ch",
+      "result": "pass",
+      "file": "EP02SC01_S04_00001_.mp4"
+    },
+    {
+      "item": "画面可见文字",
+      "kind": "semantic",
+      "why": "有没有乱码字、招牌价签上的字对不对（买肉场那次横幅出的是乱码，而我把它记成了「无乱码文字」）",
+      "result": "unchecked",
+      "detail": ""
+    },
+    {
+      "item": "景别与机位",
+      "kind": "semantic",
+      "why": "实际框景与镜头表登记的 lens_mm／dist_m／visible_w_m 对不对（S03 该是 85mm/1.4m 大特写，成片明显更宽）",
+      "result": "unchecked",
+      "detail": ""
+    },
+    {
+      "item": "服装与造型",
+      "kind": "semantic",
+      "why": "围裙、胡子、签名标记（疤）在成片里对不对",
+      "result": "unchecked",
+      "detail": ""
+    },
+    {
+      "item": "站位与轴线",
+      "kind": "semantic",
+      "why": "两人的画面左右有没有换位、有没有越轴",
+      "result": "unchecked",
+      "detail": ""
+    },
+    {
+      "item": "音轨内容",
+      "kind": "semantic",
+      "why": "有没有人声、台词对不对、口型落在谁脸上 —— **这台机器没人听过**",
+      "result": "unchecked",
+      "detail": ""
+    }
+  ],
+  "machine_summary": {
+    "pass": 20,
+    "fail": 2
+  },
+  "semantic_summary": {
+    "unchecked": 5
+  },
+  "verified_by_human": false
+}

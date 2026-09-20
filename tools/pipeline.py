@@ -536,42 +536,68 @@ def gate_S8(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
 
 
 def gate_S9(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
-    """按设定检查生成内容 —— 机械部分在这；语义部分交 agent/用户，但结论要落文件。"""
+    """按设定检查生成内容。
+
+    机械部分**由 `pipeline.py qc` 产出**（自解 MP4 容器：画布／帧数／时长／帧率／音轨），
+    语义部分（乱码文字／景别／服装／站位／音轨内容）机械判不了，**必须落成文件、必须有人看**。
+    """
     r = Rep("S9")
-    want = rules.get("canvas")
-    fps = scene["fps"]
+    rec_path = proj / "review" / f"{scene['id']}_合规检查.json"
+    if not rec_path.exists():
+        r.e("S9-01", f"没有合规检查记录：review/{scene['id']}_合规检查.json",
+            fix=f"先跑 `python tools/pipeline.py qc {proj.name} "
+                f"--scene {scene['id']} --write` 把机械项填出来")
+        return r
+    try:
+        q = json.loads(read(rec_path))
+    except ValueError as exc:
+        r.e("S9-02", f"合规检查记录不是合法 JSON：{exc}")
+        return r
+
+    # ① 记录是不是覆盖了当前这一版产物
+    newest = 0.0
     for s in (scene.get("t") or {}).get("shots") or []:
-        sid = s.get("id")
-        if not sid:
-            continue
-        hits = [p for p in (proj / "outputs").glob(f"*{sid}*.mp4")]
-        if not hits:
-            continue                      # S8 已经报过
-        # 帧数/时长只能靠容器解析；本机没有 ffprobe，**不猜**，报成待测
-        r.w("S9-01", f"镜头 {sid} 的帧数／时长／音轨**未机械核验**"
-                     f"（本机无 ffprobe；登记值 {s.get('frames')} 帧 / "
-                     f"{(s.get('frames') or 0)/fps:.2f}s，画布 {want}）",
-            fix="云机有 ffprobe；或本机装 ffmpeg 后这一步自动转成 ERROR 级核对")
-    qc = proj / "review" / f"{scene['id']}_合规检查.json"
-    if not qc.exists():
-        r.e("S9-02", f"没有合规检查记录：review/{scene['id']}_合规检查.json",
-            fix="画面内容（乱码文字／景别／服装／站位）机械判不了，"
-                "但**结论必须落成文件**才谈得上复核")
-    else:
-        try:
-            q = json.loads(read(qc))
-        except ValueError as exc:
-            r.e("S9-03", f"合规检查记录不是合法 JSON：{exc}")
-            return r
-        bad = [x for x in (q.get("checks") or []) if x.get("result") == "fail"]
-        if bad:
-            for b in bad:
-                r.e("S9-04", f"合规检查不过：{b.get('item')} —— {b.get('detail','')}")
-        if not q.get("verified_by_human"):
-            r.w("S9-05", "合规结论还没有人看过（verified_by_human=false）—— "
-                         "感知类结论只有用户能拍板（规矩 §5.C 第 11 条）")
+        for p in (proj / "outputs").glob(f"*{s.get('id')}*.mp4"):
+            newest = max(newest, p.stat().st_mtime)
+    try:
+        checked = datetime.fromisoformat(q["checked_at"]).timestamp()
+        if newest and newest > checked + 1:
+            r.e("S9-03", "合规检查记录**早于最新产物** —— 核的是旧版",
+                fix="产物变过就重跑 qc")
+    except (KeyError, ValueError):
+        r.w("S9-04", "记录里读不出 checked_at，无法判断是否覆盖当前版本")
+
+    # ② 机械项
+    ms = q.get("machine_summary") or {}
+    if ms.get("fail"):
+        for c in (q.get("checks") or []):
+            if c.get("result") == "fail":
+                r.e("S9-05", f"{c.get('shot','')} 合规不过：{c.get('item')} —— "
+                             f"期望 {c.get('expect')}，实测 {c.get('got')}",
+                    detail=c.get("detail"))
+    elif not ms:
+        r.w("S9-06", "记录里没有 machine_summary（是老版本写的？重跑 qc）")
+
+    # ③ 语义项 —— **不许静默通过**
+    sem = [c for c in (q.get("checks") or []) if c.get("kind") == "semantic"]
+    un = [c for c in sem if c.get("result") == "unchecked"]
+    if un:
+        r.w("S9-07", f"{len(un)} 条语义项还没人看："
+                     f"{'、'.join(c['item'] for c in un)}",
+            fix="画面文字／景别／服装／站位／音轨内容 —— 程序判不了，"
+                "由 agent 或用户填进同一个文件")
+    bad = [c for c in sem if c.get("result") == "fail"]
+    for c in bad:
+        r.e("S9-08", f"语义项不合规：{c['item']} —— {c.get('detail','')}")
+
+    # ④ 感知类结论只有人能拍板（规矩 §5.C 第 11 条）
+    if not q.get("verified_by_human"):
+        r.w("S9-09", "合规结论还没有人看过（verified_by_human=false）—— "
+                     "感知类结论只有用户能拍板")
+
     if r.ok():
-        r.i("S9-OK", "机械部分通过；语义部分见 review/ 记录")
+        r.i("S9-OK", f"机械项 {ms.get('pass',0)} 条全过；语义项 "
+                     f"{len(sem) - len(un)}/{len(sem)} 已填")
     return r
 
 
@@ -748,18 +774,389 @@ def cmd_seal(proj: Path, stage_id: str, verdict_file: str) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  MP4 容器解析（**本机没有 ffprobe，所以自己解**）
+# ══════════════════════════════════════════════════════════════════════
+def _boxes(buf: bytes, start: int, end: int):
+    """按 ISO-BMFF 走一遍 box 链表，yield (type, payload_start, payload_end)。"""
+    i = start
+    while i + 8 <= end:
+        size = int.from_bytes(buf[i:i + 4], "big")
+        typ = buf[i + 4:i + 8].decode("latin-1")
+        hdr = 8
+        if size == 1:                       # 64 位 largesize
+            if i + 16 > end:
+                return
+            size = int.from_bytes(buf[i + 8:i + 16], "big")
+            hdr = 16
+        elif size == 0:                     # 到文件尾
+            size = end - i
+        if size < hdr or i + size > end:
+            return
+        yield typ, i + hdr, i + size
+        i += size
+
+
+def _find(buf: bytes, start: int, end: int, path: list[str]):
+    """按路径找 box，返回 (payload_start, payload_end)；找不到返回 None。"""
+    if not path:
+        return start, end
+    for typ, s, e in _boxes(buf, start, end):
+        if typ == path[0]:
+            r = _find(buf, s, e, path[1:])
+            if r:
+                return r
+    return None
+
+
+def probe_mp4(path: Path) -> dict:
+    """解出 时长／分辨率／帧率／帧数／有无音轨／音频采样率。
+
+    **不猜**：任何一项解不出来就留 None，并记进 `unparsed`。
+    用途见 `pipeline/docs/07_管线.md` §六 —— 机械能判的只有这些，
+    画面内容（乱码文字／景别／服装）它一概不管。
+    """
+    buf = path.read_bytes()
+    out: dict = {"file": path.name, "bytes": len(buf), "unparsed": []}
+    moov = _find(buf, 0, len(buf), ["moov"])
+    if not moov:
+        out["unparsed"].append("没有 moov（不是 MP4？）")
+        return out
+
+    mv = _find(buf, moov[0], moov[1], ["mvhd"])
+    ts = dur = None
+    if mv:
+        ver = buf[mv[0]]
+        if ver == 0:
+            ts = int.from_bytes(buf[mv[0] + 12:mv[0] + 16], "big")
+            dur = int.from_bytes(buf[mv[0] + 16:mv[0] + 20], "big")
+        else:
+            ts = int.from_bytes(buf[mv[0] + 20:mv[0] + 24], "big")
+            dur = int.from_bytes(buf[mv[0] + 24:mv[0] + 32], "big")
+    if ts:
+        out["timescale"] = ts
+        out["duration_s"] = round(dur / ts, 3)
+    else:
+        out["unparsed"].append("mvhd 里读不到 timescale")
+
+    tracks = []
+    for typ, s, e in _boxes(buf, moov[0], moov[1]):
+        if typ != "trak":
+            continue
+        h = _find(buf, s, e, ["mdia", "hdlr"])
+        kind = buf[h[0] + 8:h[0] + 12].decode("latin-1") if h else "?"
+        stsd = _find(buf, s, e, ["mdia", "minf", "stbl", "stsd"])
+        stts = _find(buf, s, e, ["mdia", "minf", "stbl", "stts"])
+        nframes = None
+        if stts:
+            n = int.from_bytes(buf[stts[0] + 4:stts[0] + 8], "big")
+            tot = 0
+            for k in range(n):
+                o = stts[0] + 8 + k * 8
+                tot += int.from_bytes(buf[o:o + 4], "big")
+            nframes = tot
+        ent = None
+        if stsd:
+            # stsd: ver+flags(4) entry_count(4) → 第一个 sample entry
+            p = stsd[0] + 8
+            if p + 8 <= stsd[1]:
+                esz = int.from_bytes(buf[p:p + 4], "big")
+                ent = (buf[p + 4:p + 8].decode("latin-1"), p, min(p + esz, stsd[1]))
+        tr = {"kind": kind, "codec": ent[0] if ent else None, "frames": nframes}
+        if ent and kind == "vide":
+            tr["width"] = int.from_bytes(buf[ent[1] + 32:ent[1] + 34], "big")
+            tr["height"] = int.from_bytes(buf[ent[1] + 34:ent[1] + 36], "big")
+        if ent and kind == "soun":
+            sr = int.from_bytes(buf[ent[1] + 32:ent[1] + 36], "big") >> 16
+            tr["sample_rate"] = sr
+            tr["channels"] = int.from_bytes(buf[ent[1] + 24:ent[1] + 26], "big")
+        tracks.append(tr)
+    out["tracks"] = tracks
+    v = next((t for t in tracks if t["kind"] == "vide"), None)
+    a = next((t for t in tracks if t["kind"] == "soun"), None)
+    if v:
+        out["width"], out["height"] = v.get("width"), v.get("height")
+        out["video_codec"], out["frames"] = v.get("codec"), v.get("frames")
+        if out.get("duration_s") and v.get("frames"):
+            out["fps"] = round(v["frames"] / out["duration_s"], 3)
+    else:
+        out["unparsed"].append("没有视频轨")
+    out["has_audio"] = a is not None
+    if a:
+        out["audio_codec"] = a.get("codec")
+        out["audio_sample_rate"] = a.get("sample_rate")
+        out["audio_channels"] = a.get("channels")
+    else:
+        out["unparsed"].append("**没有音轨**")
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  S9 合规检查：**机械部分由程序填，语义部分留空等人**
+# ══════════════════════════════════════════════════════════════════════
+SEMANTIC_ITEMS = [
+    ("画面可见文字", "有没有乱码字、招牌价签上的字对不对（买肉场那次横幅出的是乱码，"
+                     "而我把它记成了「无乱码文字」）"),
+    ("景别与机位", "实际框景与镜头表登记的 lens_mm／dist_m／visible_w_m 对不对"
+                   "（S03 该是 85mm/1.4m 大特写，成片明显更宽）"),
+    ("服装与造型", "围裙、胡子、签名标记（疤）在成片里对不对"),
+    ("站位与轴线", "两人的画面左右有没有换位、有没有越轴"),
+    ("音轨内容", "有没有人声、台词对不对、口型落在谁脸上 —— **这台机器没人听过**"),
+]
+
+
+def cmd_qc(proj: Path, scene_id: str | None, write: bool, as_json: bool) -> int:
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+    want_canvas = rules.get("canvas") or [None, None]
+    fps = scene["fps"]
+    machine = []
+    for s in (scene.get("t") or {}).get("shots") or []:
+        sid = s.get("id")
+        hits = sorted((proj / "outputs").glob(f"*{sid}*.mp4"),
+                      key=lambda p: p.stat().st_mtime, reverse=True)
+        if not hits:
+            machine.append({"shot": sid, "item": "产物", "expect": "有 mp4",
+                            "got": "没有", "result": "fail"})
+            continue
+        if len(hits) > 1:
+            # 同镜多版**本身就是要人拍板的事** —— 程序不许替人选"哪一版是采用的"
+            machine.append({
+                "shot": sid, "item": "采用版本", "expect": "一镜一版",
+                "got": "／".join(p.name for p in hits),
+                "result": "fail",
+                "detail": "同一镜有多个产物；下面核的是最新那个（按 mtime）。"
+                          "**哪一版是采用的必须由人写下来**，程序不替人选"})
+        info = probe_mp4(hits[0])
+        def chk(item, exp, got):
+            ok = (exp == got)
+            machine.append({"shot": sid, "item": item, "expect": exp, "got": got,
+                            "result": "pass" if ok else "fail",
+                            "file": hits[0].name})
+        chk("画布", f"{want_canvas[0]}×{want_canvas[1]}",
+            f"{info.get('width')}×{info.get('height')}")
+        chk("帧数", s.get("frames"), info.get("frames"))
+        exp_dur = round((s.get("frames") or 0) / fps, 2)
+        got_dur = info.get("duration_s")
+        machine.append({"shot": sid, "item": "时长",
+                        "expect": f"{exp_dur}s", "got": f"{got_dur}s",
+                        "result": "pass" if got_dur and abs(got_dur - exp_dur) < 0.15
+                                  else "fail", "file": hits[0].name})
+        machine.append({"shot": sid, "item": "帧率", "expect": f"{fps}",
+                        "got": f"{info.get('fps')}",
+                        "result": "pass" if info.get("fps") and
+                                  abs(info["fps"] - fps) < 0.5 else "fail",
+                        "file": hits[0].name})
+        machine.append({"shot": sid, "item": "音轨",
+                        "expect": "有音轨（H3 原生 32kHz 立体声）",
+                        "got": (f"{info.get('audio_codec')} "
+                                f"{info.get('audio_sample_rate')}Hz "
+                                f"{info.get('audio_channels')}ch"
+                                if info.get("has_audio") else "**没有音轨**"),
+                        "result": "pass" if info.get("has_audio") else "fail",
+                        "file": hits[0].name})
+        for u in info.get("unparsed", []):
+            machine.append({"shot": sid, "item": "解析", "expect": "全部解出",
+                            "got": u, "result": "fail", "file": hits[0].name})
+
+    rec_path = proj / "review" / f"{scene['id']}_合规检查.json"
+    old = {}
+    if rec_path.exists():
+        try:
+            old = json.loads(read(rec_path))
+        except ValueError:
+            old = {}
+    # **不覆盖人已经填过的语义结论** —— 程序只填机械部分
+    old_sem = {x.get("item"): x for x in (old.get("checks") or [])
+               if x.get("item") in [i[0] for i in SEMANTIC_ITEMS]}
+    checks = list(machine)
+    for item, why in SEMANTIC_ITEMS:
+        prev = old_sem.get(item)
+        checks.append(prev or {"item": item, "kind": "semantic", "why": why,
+                               "result": "unchecked", "detail": ""})
+    rec = {
+        "_note": "S9 合规检查记录。**机械项由 `pipeline.py qc` 填；"
+                 "语义项必须由 agent 或用户填，程序不猜。**"
+                 "改动本文件后重新跑 `pipeline.py gate <项目> S9` 复核。",
+        "scene": scene["id"],
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+        "canvas": want_canvas, "fps": fps,
+        "checks": checks,
+        "machine_summary": {
+            "pass": sum(1 for c in machine if c["result"] == "pass"),
+            "fail": sum(1 for c in machine if c["result"] == "fail"),
+        },
+        "semantic_summary": {
+            "unchecked": sum(1 for c in checks
+                             if c.get("kind") == "semantic"
+                             and c.get("result") == "unchecked")},
+        "verified_by_human": bool(old.get("verified_by_human", False)),
+    }
+    if as_json:
+        print(json.dumps(rec, ensure_ascii=False, indent=2))
+    else:
+        print(f"\nS9 合规检查 · {scene['id']} —— 机械项 "
+              f"{rec['machine_summary']['pass']} 通过 / "
+              f"{rec['machine_summary']['fail']} 不过")
+        print("─" * 78)
+        for c in machine:
+            m = "✅" if c["result"] == "pass" else "❌"
+            print(f"{m} {c['shot']}  {c['item']:<6} 期望 {c['expect']}　实测 {c['got']}")
+        print("─" * 78)
+        print(f"语义项 {len(SEMANTIC_ITEMS)} 条**未检查**（程序判不了，见文件里的 why）：")
+        for item, _ in SEMANTIC_ITEMS:
+            print(f"   ⬜ {item}")
+    if write:
+        rec_path.parent.mkdir(parents=True, exist_ok=True)
+        rec_path.write_text(json.dumps(rec, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+        print(f"\n📝 已写入 {rec_path.relative_to(proj)}"
+              f"（人填过的那几条保留不动）")
+    else:
+        print("\n（加 --write 落盘）")
+    return 0 if rec["machine_summary"]["fail"] == 0 else 1
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  S8 提交生成（**过了 S7 才允许**）
+# ══════════════════════════════════════════════════════════════════════
+def cmd_run(proj: Path, scene_id: str | None, only_shot: str | None,
+            timeout: int, dry: bool) -> int:
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+
+    # ① 先自己过一遍 S7 —— 不把"该不该跑"交给 run.py 单独判断
+    s7 = gate_S7(proj, rules, scene, {})
+    if not s7.ok():
+        print("⛔ S7 审查提示词没过，不许提交：")
+        for it in s7.errors:
+            print(f"   ❌ [{it['code']}] {it['msg']}")
+        print("\n先跑：python tools/pipeline.py brief "
+              f"{proj.name} S7　→ 子 agent 出判定 → seal")
+        return 1
+
+    shots = [s for s in ((scene.get("t") or {}).get("shots") or [])
+             if not only_shot or s.get("id") == only_shot]
+    if not shots:
+        print(f"❌ 没有匹配的镜头（{only_shot}）")
+        return 1
+    print(f"▶ 场次 {scene['id']}：{len(shots)} 镜，**按顺序**提交"
+          f"（H3 一次只跑一个占显存的任务，规矩 §5.A.4）")
+    for s in shots:
+        wf = s.get("workflow")
+        print(f"\n── {s['id']}  {wf}  {s.get('frames')} 帧 "
+              f"{(s.get('frames') or 0)/scene['fps']:.2f}s")
+        if dry:
+            print("   （--dry 只列不跑）")
+            continue
+        import subprocess
+        r = subprocess.run([sys.executable, str(ROOT / "tools" / "run.py"),
+                            proj.name, wf, "--timeout", str(timeout)],
+                           cwd=str(ROOT))
+        if r.returncode != 0:
+            print(f"   ⛔ {s['id']} 提交/运行失败，**停在这里不往下跑** ——"
+                  f"云机一次只跑一个任务，继续跑会把队列搞乱")
+            return r.returncode
+    print("\n✅ 全部提交完成。回来跑："
+          f"python tools/pipeline.py qc {proj.name} --scene {scene['id']} --write")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  S4 脚手架：**机械可抽的先抽出来，抽不出的留空等人**
+# ══════════════════════════════════════════════════════════════════════
+def cmd_scaffold(proj: Path, scene_id: str | None, write: bool) -> int:
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+    t = scene.get("t") or {}
+    beats = {}
+    rel = rules.get("script")
+    if rel and (proj / rel).exists():
+        beats = PA.parse_script(proj / rel)
+
+    # 机械能抽的：镜头表里出现的角色称呼、场景 id、戏里提到的具名物件
+    names: dict[str, set] = {}
+    for s in t.get("shots") or []:
+        for key in ("characters_on_screen", "props", "cast"):
+            for x in (s.get(key) or []):
+                names.setdefault(key, set()).add(x)
+    blob = json.dumps(t, ensure_ascii=False) + "".join(
+        " ".join(v["channels"]["画面"]) for v in beats.values())
+    known = [c for c in (rules.get("characters") or {})
+             if (rules["characters"][c].get("name") in blob)]
+    manifest = {
+        "_note": "**脚手架，不是成品。** 机械能抽的已经抽出来；"
+                 "带 `TODO` 的地方必须由 agent 补全，补完跑 "
+                 "`pipeline.py gate <项目> S5` 复核。",
+        "scene": scene["id"],
+        "characters": [
+            {"id": cid, "name": (rules["characters"][cid].get("name")),
+             "files": (rules["characters"][cid].get("files") or []),
+             "signature": rules["characters"][cid].get("signature"),
+             "used_in": [s.get("id") for s in (t.get("shots") or [])
+                         if cid in json.dumps(s, ensure_ascii=False)],
+             "TODO": "确认造型与本场服装；把本场独有的状态（围裙/湿手/伤口）写清楚"}
+            for cid in known],
+        "props": [{"id": "TODO", "name": "TODO", "files": [],
+                   "TODO": "从戏的「画面」通道里挑出**必须跨镜一致**的物件"
+                           "（手机、砍刀、挂肉、价签…）"}],
+        "scenes": [{"id": scene["id"], "name": scene.get("name", ""),
+                    "files": (rules.get("scenes", {}).get(scene["id"], {})
+                              .get("files") or []),
+                    "TODO": "确认 plan／cams／hero 三件都在，并登记 GEO 文件"}],
+        "extracted_from": {"shot_table": scene["file"],
+                           "beats_with_visual": [b for b, v in beats.items()
+                                                 if v["channels"]["画面"]]},
+    }
+    if write:
+        f = proj / "storyboard" / f"{scene['id']}_资产清单.json"
+        if f.exists():
+            print(f"⛔ 已存在，**不覆盖**：{f.relative_to(proj)}"
+                  f"（要重做请自己先移走）")
+            return 1
+        f.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"📝 已写 {f.relative_to(proj)}")
+    else:
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        print("\n（加 --write 落盘；已存在时不覆盖）")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════
 def main() -> int:
     ap = argparse.ArgumentParser(description="漫剧制作管线（阶段状态机 + 程序兜底）")
     ap.add_argument("cmd", choices=["stages", "scenes", "status", "gate", "verify",
-                                    "brief", "seal", "ui", "json"])
+                                    "brief", "seal", "ui", "json", "qc", "run",
+                                    "scaffold", "probe"])
     ap.add_argument("project")
-    ap.add_argument("target", nargs="?", help="阶段 id（gate/brief/seal 用）")
+    ap.add_argument("target", nargs="?", help="阶段 id / 文件（gate/brief/seal/probe 用）")
     ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON")
     ap.add_argument("--scene", default=None)
+    ap.add_argument("--shot", default=None, help="run 用：只跑某一镜")
     ap.add_argument("--port", type=int, default=8788)
+    ap.add_argument("--write", action="store_true", help="qc/scaffold 落盘")
+    ap.add_argument("--dry", action="store_true", help="run 用：只列不跑")
+    ap.add_argument("--timeout", type=int, default=1800)
     a = ap.parse_args()
 
     proj = project_dir(a.project)
+
+    if a.cmd == "probe":
+        if not a.target:
+            ap.error("probe 需要一个 mp4 路径")
+        p = Path(a.target)
+        if not p.is_absolute():
+            p = proj / a.target
+        print(json.dumps(probe_mp4(p), ensure_ascii=False, indent=2))
+        return 0
+
+    if a.cmd == "qc":
+        return cmd_qc(proj, a.scene, a.write, False)
+
+    if a.cmd == "run":
+        return cmd_run(proj, a.scene, a.shot, a.timeout, a.dry)
+
+    if a.cmd == "scaffold":
+        return cmd_scaffold(proj, a.scene, a.write)
 
     if a.cmd == "stages":
         print(f"{'阶段':<6}{'名称':<24}{'执行者':<8}封条  说明")

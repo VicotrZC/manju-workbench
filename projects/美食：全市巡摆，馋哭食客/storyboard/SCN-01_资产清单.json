@@ -1,0 +1,51 @@
+{
+  "_note": "**脚手架，不是成品。** 机械能抽的已经抽出来；带 `TODO` 的地方必须由 agent 补全，补完跑 `pipeline.py gate <项目> S5` 复核。",
+  "scene": "SCN-01",
+  "characters": [
+    {
+      "id": "CHR-01",
+      "name": "闫清",
+      "files": [
+        "CHR/CHR01_body_neutral_00004__nohead.png",
+        "CHR/CHR01_body_back_full_00001__nohead.png"
+      ],
+      "signature": "a small old scar just above the outer end of his left eyebrow",
+      "used_in": [],
+      "TODO": "确认造型与本场服装；把本场独有的状态（围裙/湿手/伤口）写清楚"
+    },
+    {
+      "id": "CHR-02",
+      "name": "摊主",
+      "files": [
+        "CHR/CHR02_butcher_body_neutral_00009__nohead.png",
+        "CHR/CHR02_body_back_full_00001__nohead.png"
+      ],
+      "signature": "an old knife scar in the web of his right hand",
+      "used_in": [],
+      "TODO": "确认造型与本场服装；把本场独有的状态（围裙/湿手/伤口）写清楚"
+    }
+  ],
+  "props": [
+    {
+      "id": "TODO",
+      "name": "TODO",
+      "files": [],
+      "TODO": "从戏的「画面」通道里挑出**必须跨镜一致**的物件（手机、砍刀、挂肉、价签…）"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "SCN-01",
+      "name": "凌晨猪肉摊 · 买肉",
+      "files": [
+        "SCN/SCN-01_plan.png",
+        "SCN/SCN-01_cams.png"
+      ],
+      "TODO": "确认 plan／cams／hero 三件都在，并登记 GEO 文件"
+    }
+  ],
+  "extracted_from": {
+    "shot_table": "storyboard\\SCN01_镜头表.json",
+    "beats_with_visual": []
+  }
+}
