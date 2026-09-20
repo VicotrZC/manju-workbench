@@ -34,16 +34,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import pipeline as P  # noqa: E402
 
-_CACHE: dict = {"key": None, "data": None}
-
-
 def get_state(proj: Path, scene: str | None, refresh: bool = False) -> dict:
-    key = f"{proj}|{scene}"
-    if not refresh and _CACHE["key"] == key and _CACHE["data"]:
-        return _CACHE["data"]
-    data = P.scan(proj, scene)
-    _CACHE["key"], _CACHE["data"] = key, data
-    return data
+    """**不缓存。** 每次请求现场重跑全部门禁。
+
+    2026-09-21 实测：一次完整 `scan()` 只要 **0.42 秒**，缓存省不下什么。
+    而它会造成一个直接自相矛盾的后果 ——
+    **界面上显示的可能是你改之前的状态**（实测：`scaffold` 写完资产清单之后，
+    页面还显示 S4 不过）。那正是本管线要消灭的东西：
+    「程序兜底」如果兜的是上次算的结论，就退化成「程序凭记忆汇报」。
+
+    `refresh` 参数保留只为兼容旧链接，现在无论真假都重算。
+    """
+    return P.scan(proj, scene)
 
 
 PAGE = r"""<!doctype html>
