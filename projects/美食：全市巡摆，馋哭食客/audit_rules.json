@@ -33,17 +33,43 @@
   ],
   "style_ratio_min": { "t2i": 0.2, "h3": 0.06 },
 
+  "_style_skip_about": [
+    "画风探针（STYLE_*）与画风稳定性验证（STAB_*）**跳过 WF-02/03/04**。",
+    "子 agent 2026-09-21：STYLE_I_H_mature 是用户选定画风的**来源**，",
+    "拿『画风句占比不足』去判它 ERROR 是荒谬的 —— 探针本身就是标尺。",
+    "首帧工作流（FF_*）和镜头工作流**不豁免**，它们才是闸门要掐的地方。"
+  ],
+  "style_gate_skip_globs": ["STYLE_*", "STAB_*"],
+
   "axis_sentence": "THE CAMERA STAYS ON SIDE A AT ALL TIMES AND NEVER CROSSES THE AXIS",
+
+  "_speech_rate_about": [
+    "语速口径出自 script/EP02_SC01_菜市场买肉_戏.md §三：5.50 汉字/秒（第01集实测校准过）。",
+    "戏 §三 自定的密度上限是 75% —— 超过就 WARN，装不下就 ERROR。",
+    "子 agent 2026-09-21 提出：旧版程序完全不核『这一镜的时长装不装得下这一拍的语音』。"
+  ],
+  "speech_rate_cps": 5.5,
+
+  "_negative_whitelist_about": [
+    "正向提示词里允许保留的否定短语白名单（WF-22）。",
+    "规矩 §10：CFG 1.0 下负向词完全无效 —— 写进正向只是白占字数、稀释画风句占比。",
+    "确有必要保留的登记在这里，否则 WF-22 报 WARN。"
+  ],
+  "negative_phrase_whitelist": [],
 
   "_characters_about": [
     "`match` = 提示词里怎么称呼他（提示词不写内部编号）。",
+    "**中英别名都要登记** —— H3 提示词写英文（the butcher），t2i 首帧提示词写中文",
+    "（「一个四十岁上下的中年男人」）。只登记一种，`on_screen` 就会判他没出场，",
+    "**然后 WF-07/08 静默跳过** —— 身份检查于是在真正决定脸的那一步完全失效",
+    "（子 agent 2026-09-21 实测）。",
     "`signature` = 01_资产规范 §1.3 的签名标记，必须逐镜写。",
     "`positive_locks` = **必须写在正向的否定锁** —— 规矩 §10：CFG 1.0 下负向词无效。"
   ],
   "characters": {
     "CHR-01": {
       "name": "闫清",
-      "match": ["the young customer", "the young man", "闫清"],
+      "match": ["the young customer", "the young man", "闫清", "年轻人", "青年"],
       "signature": "a small old scar just above the outer end of his left eyebrow",
       "identity_note": "正面画面里他的左眉＝画面偏右那道（镜像陷阱）",
       "files": [
@@ -53,7 +79,7 @@
     },
     "CHR-02": {
       "name": "摊主",
-      "match": ["the butcher", "老板"],
+      "match": ["the butcher", "老板", "摊主", "中年男", "卖猪肉"],
       "signature": "an old knife scar in the web of his right hand",
       "positive_locks": ["clean-shaven"],
       "identity_note": "用户 2026-09-21 拍板：敦厚老实，**不要胡子**",

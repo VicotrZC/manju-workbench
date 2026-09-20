@@ -43,6 +43,7 @@ GEO 空间地图没有逐字进提示词）。**这些没有一条是"生成失�
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import io
 import json
@@ -146,6 +147,11 @@ def noscript_chars(s: str) -> int:
     return len(re.sub(r"\s+", "", s or ""))
 
 
+def _key(s: str) -> str:
+    """比对台词用的归一化键：去掉空白与中英标点，只留字。"""
+    return re.sub(r"[\s，。！？、,.!?；;：:「」『』“”\"'（）()\[\]【】…—\-]", "", s or "")
+
+
 def image_size(p: Path):
     """PNG / JPEG 的像素尺寸。读不出来返回 None（不猜）。"""
     try:
@@ -196,7 +202,19 @@ def load_rules(proj: Path) -> dict:
 
 # ── 戏文件解析（剧本层是**唯一**的节拍来源）─────────────────────────────
 BEAT_HDR = re.compile(r"^\*\*\s*(B\d+)\s*[｜|]\s*(.*?)\*\*\s*$")
-CH_ROW = re.compile(r"^\|\s*\*\*(VO|对白|UI|花字|画面)\*\*\s*\|\s*(.*?)\s*\|")
+CH_ROW = re.compile(r"^\|\s*\*\*(VO|对白|UI|花字|画面)\*\*\s*\|\s*(.*?)\s*\|\s*(\d*)\s*\|")
+
+
+def _inner(cell: str) -> str:
+    """取「」内的正文。
+
+    戏的表里写的是 `闫清：「老板，这猪肉怎么卖啊！」` —— **说话人是说话人，台词是台词**。
+    官方 H3 写法是 `(S1)` 当说话人、正文进 `<d>[Chinese] …</d>`。
+    若把「闫清：」也算进台词的字符数，字数核算和"逐句核对"都会系统性偏大
+    （子 agent 2026-09-21 实测：B2 被算成 51 字，实际 34 字）。
+    """
+    m = re.search(r"[「『“\"](.+?)[」』”\"]", cell)
+    return m.group(1).strip() if m else cell.strip()
 
 
 def parse_script(path: Path) -> dict:
@@ -205,6 +223,7 @@ def parse_script(path: Path) -> dict:
     **戏是节拍的唯一权威** —— 分镜只能认领，不能新增（pipeline/docs/02 §规则七）。
     """
     beats: dict[str, dict] = {}
+    counts: dict[str, dict[str, list[int]]] = {}
     cur = None
     for line in read(path).splitlines():
         m = BEAT_HDR.match(line.strip())
@@ -212,18 +231,23 @@ def parse_script(path: Path) -> dict:
             cur = m.group(1)
             beats[cur] = {"id": cur, "header": m.group(2).strip(),
                           "channels": {"VO": [], "对白": [], "UI": [], "花字": [], "画面": []}}
+            counts[cur] = {"VO": [], "对白": []}
             continue
         if cur is None:
             continue
         r = CH_ROW.match(line.strip())
         if r:
-            beats[cur]["channels"][r.group(1)].append(r.group(2).strip())
+            ch, cell, declared = r.group(1), r.group(2), r.group(3)
+            beats[cur]["channels"][ch].append(_inner(cell))
+            if ch in ("VO", "对白"):
+                # **优先用戏自己写的「字数」列** —— 那是它的决算口径（§三 就是按它算的）
+                counts[cur][ch].append(int(declared) if declared
+                                       else len(re.sub(r"\s", "", _inner(cell))))
     for b in beats.values():
         b["has_dialogue"] = bool(b["channels"]["对白"])
         b["has_vo"] = bool(b["channels"]["VO"])
-        b["dialogue_chars"] = sum(len(re.sub(r"\s", "", x))
-                                  for x in b["channels"]["对白"])
-        b["vo_chars"] = sum(len(re.sub(r"\s", "", x)) for x in b["channels"]["VO"])
+        b["dialogue_chars"] = sum(counts[b["id"]]["对白"])
+        b["vo_chars"] = sum(counts[b["id"]]["VO"])
     return beats
 
 
@@ -267,8 +291,15 @@ def load_shot_table(proj: Path, rules: dict) -> tuple[dict, Report]:
             cand = [proj / "assets" / ff, proj / "outputs" / ff,
                     proj / "storyboard" / ff, proj / ff]
             if not any(c.exists() for c in cand):
+                # **命名漂移**：找不到时别只说"找不到" —— 去 outputs/ 找带本镜号的产物，
+                # 把真名报出来。否则一个从来没存在过的名字能一辈子挂在表里
+                # （并且 WF-16 会因为"两边都指向同一个不存在的名字"而静默通过）。
+                drift = sorted(p.name for p in (proj / "outputs").glob(f"*{sid}*")
+                               if p.is_file())
                 rep.error("SHOT-02", f"镜头 {sid} 的首帧文件找不到：{ff}",
                           searched=[str(c.relative_to(proj)) for c in cand],
+                          likely_real=[str((proj / 'outputs' / d).relative_to(proj))
+                                       for d in drift[:8]] or "outputs/ 下也没有带本镜号的产物",
                           fix="首帧是资产，必须归档进 assets/ 或 outputs/；"
                               "否则这一镜不可复现，也无法事后审计")
         wfn = s.get("workflow")
@@ -328,7 +359,11 @@ def upstream_text(wf: dict, node_id, input_name: str, depth: int = 0) -> str:
     n = wf["_by_id"].get(node_id)
     if n is None:
         return ""
-    if n.get("type") == "CLIPTextEncode":
+    # ⚠️ 判据**必须包括 edit 链的文本节点**：`TextEncodeQwenImageEdit(Plus)` 也是提示词。
+    # （子 agent 2026-09-21 实测：只认 CLIPTextEncode 会让 5 条 edit 链被判"空提示词"，
+    #  然后 return 掉、后面所有检查全部跳过 —— 静默漏检比误报更危险。）
+    if n.get("type") in ("CLIPTextEncode", "TextEncodeQwenImageEdit",
+                         "TextEncodeQwenImageEditPlus"):
         wv = n.get("widgets_values") or []
         return wv[0] if wv and isinstance(wv[0], str) else ""
     for inp in n.get("inputs") or []:
@@ -386,6 +421,19 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
     beats = parse_script(proj / rel_script)
     rep.info("BEAT-00", f"戏里共 {len(beats)} 个节拍：{'、'.join(beats)}")
 
+    # ── WF-19 画风锁的出处（**项目级，只报一次**）──
+    # 子 agent 2026-09-21：`audit_rules.json` 里那条 H3 英文锁是程序自己加的，项目卡里没有。
+    # **拿一句没人拍板的话当闸门判据，就是又一次"我自己编验收标准"。**
+    card = proj / "项目卡.md"
+    if card.exists():
+        card_txt = norm_ws(read(card))
+        for nm, txt in (rules.get("style_locks") or {}).items():
+            if txt and norm_ws(txt) not in card_txt:
+                rep.error("WF-19",
+                          f"画风锁「{nm}」在 项目卡.md 里**找不到逐字出处**",
+                          fix="未拍板的锁不能当闸门判据：要么让用户在项目卡里逐字确认它，"
+                              "要么把它从 audit_rules.json 删掉")
+
     tbl, srep = load_shot_table(proj, rules)
     rep.items.extend(srep.items)
     shots = tbl.get("shots") or []
@@ -411,12 +459,14 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
     # 2026-09-21 实测：H3 的 detailed_description 里画风句好好地在最前面，
     # 首帧是写实的 → 成片就是写实的。所以画风闸门必须掐在**出首帧的那条工作流**上。
     _style_checked: set[str] = set()
+    _ff_owner: dict[str, list[str]] = {}
     for s in shots:
         fw = s.get("first_frame_workflow")
         if not fw:
             rep.error("SHOT-05", f"镜头 {s.get('id')} 没登记 `first_frame_workflow`",
                       fix="首帧是哪条工作流出的一定要写下来，否则画风无从追溯")
             continue
+        _ff_owner.setdefault(fw, []).append(s.get("id"))
         if not (proj / "workflows" / f"{fw}.json").exists():
             rep.error("SHOT-05", f"镜头 {s.get('id')} 的首帧工作流不存在：{fw}")
             continue
@@ -425,12 +475,25 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
         _style_checked.add(fw)
         sub, _pk = check_workflow(proj, fw, rules, {"shots": [], "beats": {}})
         for it in sub.items:
-            if it["code"] in ("WF-02", "WF-03", "WF-04"):
+            # **身份类（WF-07/08）也要透传** —— 脸是在首帧定下来的，
+            # 首帧工作流才是身份检查真正该掐的地方（子 agent 2026-09-21）。
+            # WF-22 同理：首帧提示词里的否定枚举会被 H3 继承。
+            if it["code"] in ("WF-02", "WF-03", "WF-04", "WF-07", "WF-08", "WF-22"):
                 rep.error("SHOT-05",
                           f"首帧画风闸门不过（四镜首帧都出自 {fw}）："
                           f"[{it['code']}] {it['msg']}",
                           detail={k: v for k, v in it.items()
                                   if k not in ("level", "code", "msg")})
+
+    # ── SHOT-06 首帧工作流串档：一条首帧工作流不该被 2 镜以上登记 ──
+    # 子 agent 2026-09-21 提出。同一条工作流跑多镜 = 出完就改提示词再出下一镜，
+    # 中间那镜的提示词**没有留档就没了**。本项目的 S02 就是这么丢的。
+    for fw, ids in _ff_owner.items():
+        if len(ids) > 1:
+            rep.error("SHOT-06",
+                      f"首帧工作流 `{fw}` 被 {len(ids)} 个镜头共用：{'、'.join(ids)}",
+                      fix="一条首帧工作流只跑一镜。共用意味着改提示词再跑，"
+                          "上一镜的提示词没留档就丢了 —— 跑 sync-prompts 先归档")
 
     # ── 资产先于分镜（01_资产规范 §〇 铁律：无图不进分镜）──
     for key in ("characters", "scenes"):
@@ -461,6 +524,25 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
         return rep, {}
     wf = load_workflow(wf_path)
     nodes = wf.get("nodes", [])
+
+    # 本工作流对应镜头表里的哪一镜（没有就是 None）。
+    # ⚠️ **必须在任何用到它的检查之前算出来** —— 否则 `shot` 未绑定就崩。
+    shot = next((s for s in (chain.get("shots") or [])
+                 if s.get("workflow") == wf_name or s.get("id") == wf_name), None)
+
+    # ── 这条工作流是不是「某个镜头的工作流」？──
+    # **不是镜头工作流就跳过场次相关的检查。**
+    # 子 agent 2026-09-21 实测：26 条工作流报出 90 条 ERROR，其中 75 条是误报 ——
+    # 因为画风探针（STYLE_*）、稳定性验证（STAB_*）本来就不属于任何场次，
+    # 拿「GEO 块在不在」「签名标记写没写」去要求它们是错的。
+    # **会误报的检查器比没有检查器更糟**（规矩 §5.C 第 14 条）。
+    table_wfs = {s.get("workflow") for s in (chain.get("shots") or [])}
+    is_shot_wf = shot is not None or wf_name in table_wfs
+    if not is_shot_wf:
+        rep.info("SCOPE-00",
+                 "本工作流未在任何镜头表里登记（画风探针／稳定性验证／首帧工作流）"
+                 "→ 场次相关检查 WF-05/07/08/09/09b/10/16/18/20 已跳过")
+
 
     h3 = h3_nodes(wf)
     lat = [n for n in nodes if n.get("type") in
@@ -497,7 +579,16 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # ── WF-02/03/04 画风锁定句（**买肉场成片的头号病根**）──
     # 三条互相独立：**是否逐字**、**在不在最前面**、**占比够不够**。
     # 第 2、3 条即使第 1 条不过也要量 —— 因为"被改写"和"被淹没"是两个病，得分开报。
+    #
+    # ⚠️ **画风探针与稳定性验证工作流要跳过这三条。**
+    # 子 agent 2026-09-21：STYLE_I_H_mature 是用户选定画风的**来源**，
+    # 拿"画风句占比不足"去判它 ERROR 是荒谬的 —— 探针本身就是标尺。
     locks = rules.get("style_locks") or {}
+    skip_style = any(fnmatch.fnmatch(wf_name, g)
+                     for g in (rules.get("style_gate_skip_globs") or []))
+    if skip_style:
+        rep.info("WF-02", f"{wf_name} 是画风探针/稳定性验证工作流 → WF-02/03/04 跳过")
+        locks = {}
     np_styled = norm_ws(styled)
     hit_name, pos = None, None
     for nm, txt in locks.items():
@@ -505,7 +596,7 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             hit_name, pos = nm, np_styled.find(norm_ws(txt))
             break
     style_len = None
-    if hit_name is None:
+    if hit_name is None and not skip_style:
         rep.error("WF-02",
                   "**画风锁定句没有逐字出现**（项目卡写明「照抄，不许改写」）",
                   registered=list(locks),
@@ -523,7 +614,7 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             if pos is not None:
                 break
     else:
-        style_len = len(norm_ws(locks[hit_name]))
+        style_len = len(norm_ws(locks[hit_name])) if hit_name else None
 
     if pos is not None and pos >= 0:
         if pos > 20:
@@ -543,8 +634,25 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
         else:
             rep.info("WF-04", f"画风句占比 {ratio:.1%}（下限 {floor:.0%}）")
 
+    # ── WF-19 画风锁必须能在项目卡里找到逐字出处 ──
+    # 子 agent 2026-09-21 提出：`audit_rules.json` 里那条 H3 英文锁是**程序自己加的**，
+    # 项目卡里没有。**拿一句没人拍板的话当闸门判据，就是又一次"我自己编验收标准"。**
+    # ⚠️ 这是**项目级**问题 —— 在 `check_chain` 里报一次，不逐工作流重复刷屏。
+
+    # ── WF-22 正向提示词里不许堆否定枚举（CFG 1.0 下无效，还稀释画风句占比）──
+    # 子 agent 2026-09-21 实测：FF 首帧提示词末尾那串「没有招牌、没有价签文字…」
+    # 没有拦住横幅上的中文，反而是首帧出乱码字的同一条提示词。
+    NEG_WORDS = ("没有", "不要", "不许", "禁止", "无字")
+    wl = rules.get("negative_phrase_whitelist") or []
+    hits = [w for w in NEG_WORDS if w in prompt and w not in wl]
+    if hits:
+        rep.warn("WF-22",
+                 f"正向提示词里出现否定枚举 {hits}（共 {sum(prompt.count(w) for w in hits)} 处）",
+                 fix="规矩 §10：CFG 1.0 下负向词完全无效，写进正向只是白占字数、稀释画风句。"
+                     "确实需要保留的，登记到 audit_rules.json 的 negative_phrase_whitelist")
+
     # ── WF-05 GEO 空间地图必须逐字进 detailed_description（§2.3）──
-    geo = geo_block(proj, rules)
+    geo = geo_block(proj, rules) if is_shot_wf else ""
     if geo:
         if norm_ws(geo) not in norm_ws(prompt):
             rep.error("WF-05",
@@ -552,20 +660,21 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                       fix="把 storyboard/GEO空间地图.md §二 的整块贴进 detailed_description")
         else:
             rep.info("WF-05", "GEO 英文块已逐字锁定")
-    else:
+    elif is_shot_wf:
         rep.warn("WF-05", "audit_rules.json 没登记 geo_file，跨镜几何无从核对")
 
-    # ── WF-06 禁字幕句 ──
+    # ── WF-06 禁字幕句（**只对 H3 视频成立**）──
+    # 子 agent 2026-09-21：t2i 静帧没有"字幕"这回事，无条件执行会误报 18 条。
     # 只要求句干在（允许后面追加限定，例如"…other than the video on the phone screen"），
     # 免得把合法的变体误报成缺失（规矩 §14）。
-    if NO_SUB_STEM not in prompt:
+    if kind == "h3" and NO_SUB_STEM not in prompt:
         rep.error("WF-06", "缺禁字幕句",
                   expect=NO_SUB_STEM,
                   fix="规矩 §9：<d> 与禁字幕句**不是二选一**，两个都要有")
 
     # ── WF-07 签名标记（§1.3 跨镜识别锚）──
     for cid, c in (rules.get("characters") or {}).items():
-        if not on_screen(prompt, c):
+        if skip_style or not on_screen(prompt, c):
             continue
         sig = c.get("signature")
         if sig and norm_ws(sig).lower() not in norm_ws(prompt).lower():
@@ -575,7 +684,7 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
 
     # ── WF-08 否定锁必须写在正向（CFG 1.0 负向无效）──
     for cid, c in (rules.get("characters") or {}).items():
-        if not on_screen(prompt, c):
+        if skip_style or not on_screen(prompt, c):
             continue
         for lock in c.get("positive_locks") or []:
             if norm_ws(lock).lower() not in norm_ws(prompt).lower():
@@ -585,8 +694,6 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                               "「不要什么」必须写进正向")
 
     # ── WF-09 台词保真（**买肉场成片的第二号病根**）──
-    shot = next((s for s in (chain.get("shots") or [])
-                 if s.get("workflow") == wf_name or s.get("id") == wf_name), None)
     if shot is not None:
         beats = chain.get("beats") or {}
         owned = [b for b in (shot.get("beats") or []) if b in beats]
@@ -606,6 +713,48 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                       fix="h3res/guide_ref_en.md：台词写 <d>[Chinese] 原文</d>")
         elif not expects_speech and not denies:
             rep.warn("WF-09", "这一镜无对白，但提示词没有显式声明无人说话（容易漂出人声）")
+
+        # **逐条核对，不是"有 <d> 就算过"**（子 agent 2026-09-21 提出的漏检）：
+        # 三句对白只写进去一句也能过旧版 WF-09。
+        # 口径（同一轮子 agent 纠正）：**判据是"这句原文必须落在某个 `<d>…</d>` 里"**，
+        # 不是"在提示词里随便出现过" —— 否则照官方写法写对了它也会永远报错。
+        if expects_speech:
+            lines = []
+            for b in owned:
+                if b in beats:
+                    lines += beats[b]["channels"]["对白"] + beats[b]["channels"]["VO"]
+            dblocks = re.findall(r"<d>(.*?)</d>", prompt, re.S)
+            inside = _key(" ".join(dblocks))
+            missing_lines = [x for x in lines if _key(x) not in inside]
+            if missing_lines:
+                rep.error("WF-09b",
+                          f"这一镜有 {len(missing_lines)} 条台词/VO 的原文没落进 `<d>…</d>`",
+                          missing=missing_lines,
+                          got_d_blocks=len(dblocks),
+                          fix="戏层写了的每一句都要有落点；漏一句就等于改了戏。"
+                              "写法见 h3res/guide_ref_en.md："
+                              "<Subject 3> (S1) says, <d>[Chinese] 原文</d>")
+
+    # ── WF-20 语音密度：这一镜的时长装不装得下这一拍的语音 ──
+    # 戏 §三 自己写死的口径：语速 5.50 汉字/秒、密度上限 75%。
+    if shot is not None:
+        beats = chain.get("beats") or {}
+        owned = [b for b in (shot.get("beats") or []) if b in beats]
+        nchar = sum(beats[b]["dialogue_chars"] + beats[b]["vo_chars"] for b in owned)
+        rate = rules.get("speech_rate_cps")
+        dur = shot.get("duration_s") or (
+            (shot.get("frames") or 0) / (chain.get("fps") or 24))
+        if rate and nchar and dur:
+            need = nchar / rate
+            if need > dur:
+                rep.error("WF-20",
+                          f"镜头 {shot.get('id')} 只有 {dur:.2f}s，"
+                          f"装不下 {nchar} 字语音（需 {need:.2f}s @{rate} 字/秒）",
+                          fix="加长这一镜、拆镜，或回戏层砍字；不许把台词删掉")
+            elif need > dur * 0.75:
+                rep.warn("WF-20",
+                         f"镜头 {shot.get('id')} 语音密度 {need / dur:.0%}"
+                         f"（{nchar} 字 / {dur:.2f}s），超过戏 §三 自定的 75% 上限")
 
     # ── WF-10 取景必须写在描述段起始（旧线 5.11：首帧是什么构图第一句就写什么）──
     # 判据：`[Shot 1]` 标记之后紧接着就应该是取景句 —— 这是本项目四镜的写法，
@@ -676,8 +825,12 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
         w, h_ = canvas
         if w % 32 or h_ % 32:
             rep.error("WF-12", f"画布 {w}×{h_} 不是 32 的倍数")
-        if want_canvas and list(canvas) != list(want_canvas):
-            rep.error("WF-12", f"画布 {w}×{h_} ≠ 项目锁定 {want_canvas[0]}×{want_canvas[1]}")
+        # 项目锁定只在**镜头工作流**上强制：资产卡（768×1152 等）另有自己的画布，
+        # 拿成片画布去判它们是误报（子 agent 2026-09-21：4 条）。
+        # 需要单独指派的，登记在 audit_rules.json 的 canvas_by_workflow。
+        want = (rules.get("canvas_by_workflow") or {}).get(wf_name) or want_canvas
+        if want and is_shot_wf and list(canvas) != list(want):
+            rep.error("WF-12", f"画布 {w}×{h_} ≠ 项目锁定 {want[0]}×{want[1]}")
         if kind == "h3" and min(w, h_) != H3_SHORT_SIDE:
             rep.error("WF-12", f"H3 画布短边 {min(w, h_)} ≠ {H3_SHORT_SIDE}")
 
@@ -689,9 +842,9 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             rep.error("WF-13", f"提示词里出现 `{ch}` —— 旧线实测会被画进画面")
             break
 
-    # ── WF-14 防跳轴句（**只在没登记 GEO 块时兜底** —— 否则 WF-05 已经覆盖了）──
+    # ── WF-14 防跳轴句（**只在没登记 GEO 块时兜底**，且只对镜头工作流）──
     anchor = rules.get("axis_sentence")
-    if anchor and not geo and norm_ws(anchor).lower() not in norm_ws(prompt).lower():
+    if anchor and is_shot_wf and not geo and norm_ws(anchor).lower() not in norm_ws(prompt).lower():
         rep.error("WF-14", "缺防跳轴句（GEO 的 screen direction rule 必须逐字在提示词里）",
                   expect=anchor[:90] + "…")
 
