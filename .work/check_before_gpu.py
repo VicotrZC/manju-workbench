@@ -247,6 +247,33 @@ def check_workflow(path: Path, info: dict | None = None) -> Report:
             rep.err(f"节点 {n['id']}（{n['type']}）的提示词里有书名号「」"
                     f"—— 实测会被画进画面，删掉：…{t[max(0, t.find('「') - 30):t.find('「') + 30]}…")
 
+    # 7) ★ Qwen-Image-Edit 的静默降级陷阱（ComfyUI issue #2681 / #2678）
+    #    `TextEncodeQwenImageEdit*` **不接受尺寸参数**：它把参考图缩到硬编码的
+    #    int(1024*1024) ≈ 1.05 MP（按源图宽高比），并把参考 token 与生成 token 放在
+    #    **同一个居中坐标网格**上。网格不一样大 → 细节复制不过去 → 模型「重新合成」主体，
+    #    表现是材质变塑料/CGI、印刷细节变泛化形状，而**什么都不报错**。
+    #    来源：artokun/comfyui-mcp 的 qwen-image-edit skill（2026-09-20 经 web_search 找到）。
+    edit_encoders = [n for n in wf["nodes"]
+                     if n["type"].startswith("TextEncodeQwenImageEdit")]
+    if edit_encoders:
+        for n in wf["nodes"]:
+            if n["type"] in LATENT_TYPES:
+                wv = n.get("widgets_values") or []
+                size = wv[:2] if len(wv) >= 2 else "?"
+                mp = None
+                if len(wv) >= 2 and all(isinstance(v, int) for v in wv[:2]):
+                    mp = wv[0] * wv[1] / 1e6
+                rep.warn(
+                    f"edit 图（有 {edit_encoders[0]['type']}）却用了固定尺寸 latent {size}"
+                    + (f" = {mp:.2f} MP" if mp else "")
+                    + " —— 编码器派生的是 ~1.05 MP，网格不一致时模型会**重新合成主体**"
+                      "（塑料感 / CGI 感 / 细节泛化）且**不报错**。"
+                      "正确接法：LoadImage → FluxKontextImageScale →（TextEncode ＋ "
+                      "VAEEncode）→ KSampler.latent_image。见 issue #2681")
+        if not any(n["type"] == "FluxKontextImageScale" for n in wf["nodes"]):
+            rep.warn("edit 图里没有 FluxKontextImageScale —— 它负责把源图缩到模型期望的 "
+                     "~1.05 MP；缺了它，参考与输出的坐标网格可能对不上（#2681）")
+
     rep.note(f"节点 {len(nodes)}｜links {len(links)}｜"
              f"采样 {['%d步/CFG%s' % (s, c) for _, s, c in samplers] or '无'}｜"
              f"画布 {canvases or '无'}")
