@@ -1,0 +1,55 @@
+{
+  "scene": "SCN-02",
+  "characters": [
+    {
+      "id": "CHR-01",
+      "name": "闫清",
+      "files": [
+        "CHR/CHR01_body_neutral_00004__nohead.png",
+        "CHR/CHR01_body_back_full_00001__nohead.png"
+      ],
+      "signature": "a small old scar just above the outer end of his left eyebrow",
+      "used_in": [
+        "S00"
+      ],
+      "costume": "本场为凌晨出门造型（从被窝坐起→骑小电驴出空街），无换装、无围裙；沿用 CHR-01 身体基础资产本身"
+    }
+  ],
+  "props": [
+    {
+      "id": "PROP-01",
+      "name": "手机（凌晨四点闹钟，屏幕亮起 04:00）",
+      "files": [
+        "PROP/PROP01_phone_alarm_00001.png"
+      ],
+      "used_in": [
+        "S00"
+      ],
+      "why": "S00 的画面锚点之一：黑暗空街里唯一的光源与信息板，屏幕显示的 04:00 承担「他要动真格了」的全部叙事，机型与发光屏必须与后续室内场次（猪肉摊老板掏手机）保持同一部手机的一致性"
+    },
+    {
+      "id": "PROP-02",
+      "name": "小电驴（闫清代步电动车）",
+      "files": [
+        "PROP/PROP02_ebike_00001.png"
+      ],
+      "used_in": [
+        "S00"
+      ],
+      "why": "S00 中他骑它出画赶往菜市，B4 结尾他「把小电驴驮满」骑出市场，同一辆车必须跨镜同款同色，否则两场接力断掉"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "SCN-02",
+      "name": "凌晨空街（小区外街道，四点、天还黑，独自一人骑小电驴赶往菜市）",
+      "files": [
+        "storyboard/SCN02_GEO空间地图.md",
+        "SCN/SCN02_street_predawn_00001.png"
+      ],
+      "used_in": [
+        "S00"
+      ]
+    }
+  ]
+}

@@ -182,6 +182,18 @@ def test_multi_scene():
                 shutil.copytree(src / sub, tmp / sub)
         rules = PA.load_rules(tmp)
 
+        # ⚠️ **把工作流登记换成不存在的假名**：这一节测的是**节拍覆盖判据**，
+        # 不该被"某个工作流的画风句占比"这种完全无关的问题拖成 FAIL。
+        # 假名而不是 `null` —— `workflow` 是必填字段（SHOT-01 会报空），
+        # 填假名则字段在、但不会真去加载文件。
+        # 2026-09-21 实测：盘上有一条画风占比不过的工作流，负向样例就整体报错了 ——
+        # **测试的失败原因必须指向它要测的那件事**，否则读的人会去查错地方。
+        for tf in (tmp / "storyboard").glob("*_镜头表.json"):
+            t = json.loads(tf.read_text(encoding="utf-8-sig"))
+            for s in t.get("shots") or []:
+                s["workflow"] = f"_T_{s.get('id')}_h3"
+            tf.write_text(json.dumps(t, ensure_ascii=False, indent=2), encoding="utf-8")
+
         def codes(table_rel: str, mutate=None) -> set[str]:
             """改坏一份镜头表，跑链，返回报出来的 code 集合。
 
@@ -199,8 +211,13 @@ def test_multi_scene():
                                       table_rel=table_rel)
             return {i["code"] for i in rep.items if i["level"] == "ERROR"}
 
-        # ── 原点：不动它，应当无 ERROR ──
-        check("原样：两场都没有 ERROR", codes("storyboard/SCN02_镜头表.json"), set())
+        # ── 原点：不动它，**节拍覆盖类判据不该报任何错** ──
+        # ⚠️ 断言的是"没有 BEAT-* 的错"，不是"一个错都没有"。
+        # 这一节测的是节拍覆盖；工作流内容／首帧／资产图各自有各自的工序与测试，
+        # 它们正在返工时不该把这条判据的测试染红（**失败原因必须指向被测的那件事**）。
+        c0 = codes("storyboard/SCN02_镜头表.json")
+        check("原样：没有任何 BEAT-* 的错",
+              sorted(x for x in c0 if x.startswith("BEAT-")), [])
 
         # ── BEAT-01：本场那一拍没人认领 ──
         c = codes("storyboard/SCN02_镜头表.json",
@@ -234,7 +251,9 @@ def test_multi_scene():
             json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
         tables = PA.all_shot_tables(tmp, rules)
         check("两个场次的镜头表都能被发现", len(tables), 2)
-        wf_scene = PA.table_for_workflow(tmp, rules, "EP02SC02_S00_h3")
+        # 按工作流反查归属：**用替身名测查表逻辑**，不依赖盘上有没有真工作流
+        # （真工作流可能因为内容问题正在返工，那不该让这条判据的测试变红）
+        wf_scene = PA.table_for_workflow(tmp, rules, "_T_S00_h3")
         check("能按工作流反查它属于哪一场（SCN-02）",
               (wf_scene or "").endswith("SCN02_镜头表.json"), True)
 

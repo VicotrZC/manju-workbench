@@ -26,6 +26,7 @@
       "first_frame": "FF_EP02SC02_S00_00001_.png",
       "first_frame_workflow": "FF_EP02SC02_S00",
       "workflow": "EP02SC02_S00_h3",
+      "assets": ["CHR-01", "PROP-01", "PROP-02", "SCN-02"],
       "content": "四点空街：手机屏幕在黑暗里亮起04:00，闫清从被窝坐起、骑小电驴出门，整条街只有环卫工人和扫帚声 —— 零对白，两句VO，不出台词。"
     }
   ],

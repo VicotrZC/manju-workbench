@@ -1,0 +1,831 @@
+{
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      }
+    },
+    {
+      "id": 2,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        40,
+        170
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            9,
+            11
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      }
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        420,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      }
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            18,
+            20
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        550
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            4,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 6,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        650
+      ],
+      "size": [
+        320,
+        320
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "FF_EP02SC02_S00_00001_.png",
+        "image"
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      }
+    },
+    {
+      "id": 7,
+      "type": "MiniMaxH3ReferenceToVideo",
+      "pos": [
+        520,
+        40
+      ],
+      "size": [
+        720,
+        560
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 4
+        },
+        {
+          "name": "ref_images.ref_image_0",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            10
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            16
+          ],
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "subject_definitions:\n<Subject 1> is 闫清, wearing 本场为凌晨出门造型（从被窝坐起→骑小电驴出空街），无换装、无围裙；沿用 CHR-01 身体基础资产本身. Identity anchor that must be visible: a small old scar just above the outer end of his left eyebrow. In [Shot 1] Yan Qing appears on his small e-bike in the mid-to-far distance, rides through the frame toward the market and exits it, staying small in the wide static frame throughout; once out of frame he does not return..\n<Subject 2> is 手机（凌晨四点闹钟，屏幕亮起 04:00）.\n<Subject 3> is 小电驴（闫清代步电动车）.\n<Subject 4> is the location 凌晨空街（小区外街道，四点、天还黑，独自一人骑小电驴赶往菜市）. In [Shot 1] The pre-dawn street starts empty and dark, stays dark, and never changes location; the only change is the phone screen lighting up in the near foreground, the sweeper's slow broom work far down the road, and the brief pass of the e-bike before the street settles back to stillness..\n<Picture 1> is the first frame of [Shot 1] and fixes the framing, the camera position and the lighting. The shot scale is already final in <Picture 1> and must not change.\n\nsummary:\nA static wide shot of an empty pre-dawn street at four in the morning. The phone in the dark foreground lights up to show 04:00, a lone street sweeper works far down the empty road, and Yan Qing rides his small e-bike through the frame and out of it toward the market. Off-screen, a voice recounts that the market five hundred metres south of the compound opens at 4:30, and that while setting the alarm he had wondered who would go shopping at 4:30.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved — Yan Qing keeps his identity, build and clothing, and is shown riding his small e-bike through the frame and out of it toward the market, exactly the action the beat calls for, with no dialogue assigned to him. <Subject 2> (appears in [Shot 1]): fully_preserved — the phone stays in the dark near foreground of the static frame, screen waking to read 04:00, which is its only stated function in this shot. <Subject 3> (appears in [Shot 1]): fully_preserved — the small e-bike is carried with Yan Qing, ridden through and out of frame toward the market, and no other vehicle appears. <Subject 4> (appears in [Shot 1]): fully_preserved — the pre-dawn empty street outside the compound stays dark and unchanged for the whole 7.29 seconds, holding the same static wide framing from start to end.\n\ndetailed_description:\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\n\n[Shot 1] A static wide shot at eye level on the pre-dawn street, a lit phone screen showing 04:00 in the dark foreground, one street sweeper far down the empty road, Yan Qing riding his small e-bike out of frame toward the market.\n\nGEOSPATIAL LOCK (identical in every shot of this scene):\n— Location: one east-west city street outside a Chinese residential compound, at four in the morning. The street is completely empty of people except for one street sweeper far away.\n— Coordinates: x increases to the EAST, y increases to the NORTH. The origin is the point where the midline of the street meets the midline of the compound gate, so y = 0 is the centre of the roadway.\n— Roadway: asphalt, running east-west, x −40 to +40. The road is 7.00 m wide, that is y −3.5 to +3.5.\n— Pavements: one on each side, 2.50 m wide. North pavement y +3.5 to +6.0, south pavement y −3.5 to −6.0.\n— Kerbs: one on each side, 0.15 m high, at y = ±3.5.\n— Compound gate: on the SOUTH side, wrought iron, x −1.2 to +1.2, y −6.0 to −6.6. Inside the gate is the compound yard, which never appears in frame.\n— Bicycle shelter: on the SOUTH pavement, light steel canopy, x −2.0 to +1.0, y −4.0 to −5.5, with one row of small electric scooters parked under it.\n— Street lamps: ONE row only, on the NORTH side, with cantilever arms, 12.00 m apart, poles at x = −24, −12, 0, +12, +24, y = +3.6, lamp heads 6.00 m above the ground. THERE ARE NO LAMPS ON THE SOUTH SIDE. This one row is the only light source on the street.\n— Street trees: on the NORTH pavement, 12.00 m apart, alternating with the lamps (x = −18, −6, +6, +18), trunks 0.25 m in diameter.\n— The street sweeper: on the NORTH pavement, x +6.0, y +4.6, FACING WEST, pushing one hand cart.\n— Yan Qing (C01): RIDING a small electric scooter. He starts just inside the compound gate at x −0.6, y −5.6, and TRAVELS EASTWARD (+x) along the outer edge of the SOUTH pavement at about y −4.2. He only ever moves east and never turns back.\n— The scooter: a step-through two-wheel electric scooter about 1.70 m long; its small headlight is the only light that moves with him.\n— The phone: held in Yan Qing's right hand, screen lit, throwing its light upward onto his face and chest.\n— Ambient level: very dark. No moon, no stars, essentially no skylight.\n— Motivated light: the single row of street lamps on the NORTH side (about 4000 K, cool white, axis straight down and very slightly north) is the ONLY light source, plus the phone screen (cool, slightly higher colour temperature, reaching Yan Qing alone).\n— Shadows: every shadow falls almost straight down and slightly SOUTH, because the lamps are north of the road. Soft-edged and low in contrast. Only the patch lit by the phone screen has a harder near-field falloff.\n— Sky: the eastern skyline is very faintly paling at the end of this shot, carrying the dawn that SCN-01 finishes on.\n— Screen direction rule: the compound gate and the bicycle shelter stay on the SOUTH (frame left, away from the camera) side and the street lamps and the street sweeper stay on the NORTH (frame right, toward the camera) side, IN EVERY SHOT. Yan Qing travels only toward the EAST, which is frame right. No second rider, no pedestrian, and no vehicle ever enters the frame, and no figure is ever duplicated.\n\n0.0-1.5s The pre-dawn street is empty and dark in a static wide shot; the phone lies screen-down and black in the near foreground, and far down the road a single street sweeper stands as a small unmoving silhouette. 1.5-3.0s The phone screen wakes in the dark foreground, its glow spilling a thin light onto the asphalt and holding steady with 04:00 on the display. 3.0-4.5s Far down the empty road the street sweeper begins pushing his broom along the kerb, the only moving figure in the frame besides the phone glow. 4.5-6.0s Yan Qing rides his small e-bike into the frame and out of it again, heading toward the market, and the sound of the motor thins away with him. 6.0-7.29s The e-bike is gone from the frame; the street holds completely still, the phone glow on the asphalt steady and unchanged, the sweeper's silhouette far down the road settling into the same slow rhythm, no further movement before the cut.\n\nOff-screen voice-over (S1), <d>[Chinese] 系统说，小区五百米路南的菜市场，四点半就开门。</d> Off-screen voice-over (S2), <d>[Chinese] 我定闹钟的时候还在想——谁会四点半去买菜。</d>\n\nNo subtitles, captions or on-screen text appear at any point.\n\noverall_soundscape:\nPre-dawn urban quiet: a low, wide room tone of an empty street at four in the morning, the faint scrape and hiss of a broom on asphalt far down the road, the soft electric whine of a small e-bike approaching and thinning away as it leaves, and the tiny electronic tick of a phone screen waking in the near foreground. No voices are present in the scene; the mix leaves a clear, uncluttered pocket of near-silence for the two off-screen voice-over lines.\n\nnon_diegetic_music:\nnone",
+        1376,
+        768,
+        175
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+      }
+    },
+    {
+      "id": 8,
+      "type": "RandomNoise",
+      "pos": [
+        1280,
+        40
+      ],
+      "size": [
+        320,
+        82
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        20261021,
+        "fixed"
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      }
+    },
+    {
+      "id": 9,
+      "type": "BasicGuider",
+      "pos": [
+        1280,
+        170
+      ],
+      "size": [
+        320,
+        46
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      }
+    },
+    {
+      "id": 10,
+      "type": "KSamplerSelect",
+      "pos": [
+        1280,
+        260
+      ],
+      "size": [
+        320,
+        58
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            14
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "res_multistep"
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      }
+    },
+    {
+      "id": 11,
+      "type": "BasicScheduler",
+      "pos": [
+        1280,
+        360
+      ],
+      "size": [
+        320,
+        106
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            15
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "simple",
+        4,
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      }
+    },
+    {
+      "id": 12,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1660,
+        40
+      ],
+      "size": [
+        300,
+        130
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 12
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 13
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 14
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 15
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            17,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      }
+    },
+    {
+      "id": 13,
+      "type": "VAEDecode",
+      "pos": [
+        1660,
+        220
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 17
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 14,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1660,
+        300
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            22
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      }
+    },
+    {
+      "id": 15,
+      "type": "CreateVideo",
+      "pos": [
+        1960,
+        40
+      ],
+      "size": [
+        300,
+        106
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 21
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            23
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        24.0
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      }
+    },
+    {
+      "id": 16,
+      "type": "SaveVideo",
+      "pos": [
+        1960,
+        200
+      ],
+      "size": [
+        420,
+        300
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 23
+        }
+      ],
+      "outputs": [],
+      "widgets_values": [
+        "meishi/EP02SC02_S00_h3",
+        "auto",
+        "auto"
+      ],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      }
+    },
+    {
+      "id": 17,
+      "type": "MarkdownNote",
+      "pos": [
+        2420,
+        40
+      ],
+      "size": [
+        600,
+        720
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "widgets_values": [
+        "# SCN-02 S00 · H3 Ref2VA（六段式）\n\n**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n| 项 | 值 |\n|---|---|\n| 后端 | MiniMax H3 **Ref2VA**（一次前向同时出画面＋声音） |\n| 画布 | 1376×768 |\n| 帧数 | **175** ＝ 17k+5 ✅ |\n| 时长 | 7.29s @ 24fps |\n| 采样 | **4 步** / simple / res_multistep / denoise 1.0 |\n| LoRA | `minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`（**4 步档**）|\n| 参考图 | 只有 `ref_image_0` ＝ `<Picture 1>`，来自 `FF_EP02SC02_S00_00001_.png` |\n\n**六段式段序固定**：subject_definitions → summary → retention_analysis →\ndetailed_description → overall_soundscape → non_diegetic_music。\n\n**画风句在 detailed_description 第 0 字，GEO 英文块逐字在内** —— 这两条由程序拼进去，改提示词前先看 `pipeline/docs/06_审计闸门.md`。"
+      ],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      3,
+      0,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      4,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      5,
+      0,
+      7,
+      2,
+      "VAE"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      3,
+      "IMAGE"
+    ],
+    [
+      9,
+      2,
+      0,
+      9,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      7,
+      0,
+      9,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      11,
+      2,
+      0,
+      11,
+      0,
+      "MODEL"
+    ],
+    [
+      12,
+      8,
+      0,
+      12,
+      0,
+      "NOISE"
+    ],
+    [
+      13,
+      9,
+      0,
+      12,
+      1,
+      "GUIDER"
+    ],
+    [
+      14,
+      10,
+      0,
+      12,
+      2,
+      "SAMPLER"
+    ],
+    [
+      15,
+      11,
+      0,
+      12,
+      3,
+      "SIGMAS"
+    ],
+    [
+      16,
+      7,
+      1,
+      12,
+      4,
+      "LATENT"
+    ],
+    [
+      17,
+      12,
+      0,
+      13,
+      0,
+      "LATENT"
+    ],
+    [
+      18,
+      4,
+      0,
+      13,
+      1,
+      "VAE"
+    ],
+    [
+      19,
+      12,
+      0,
+      14,
+      0,
+      "LATENT"
+    ],
+    [
+      20,
+      5,
+      0,
+      14,
+      1,
+      "VAE"
+    ],
+    [
+      21,
+      13,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      14,
+      0,
+      15,
+      1,
+      "AUDIO"
+    ],
+    [
+      23,
+      15,
+      0,
+      16,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

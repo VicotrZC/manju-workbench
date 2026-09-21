@@ -409,8 +409,29 @@ def load_shot_table(proj: Path, rules: dict,
 
 
 # ── GEO 空间地图：英文块必须**逐字**进每条提示词（01_资产规范 §2.3）────
-def geo_block(proj: Path, rules: dict) -> str:
-    rel = rules.get("geo_file")
+def geo_rel_for(proj: Path, rules: dict, table_rel: str | None) -> str | None:
+    """**这个场次**的 GEO 文件。
+
+    2026-09-21 修的漏洞：`geo_block` 原来只读项目级 `geo_file`。
+    拆场次后项目级那份是 **SCN-01 的摊内地图**，于是拿摊内的米数去量
+    SCN-02（室外空街）的提示词 —— 必然报「GEO 没逐字进」，
+    而真正该比的是 `SCN02_GEO空间地图.md`。
+
+    **判据必须按场次解析，和 `check_chain` 是同一个道理。**
+    """
+    if table_rel:
+        try:
+            t = json.loads(read(proj / table_rel))
+            rel = t.get("geo")
+            if rel:
+                return str(rel)
+        except (OSError, ValueError):
+            pass
+    return rules.get("geo_file")
+
+
+def geo_block(proj: Path, rules: dict, table_rel: str | None = None) -> str:
+    rel = geo_rel_for(proj, rules, table_rel)
     if not rel:
         return ""
     f = proj / rel
@@ -750,8 +771,19 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
 
     # 本工作流对应镜头表里的哪一镜（没有就是 None）。
     # ⚠️ **必须在任何用到它的检查之前算出来** —— 否则 `shot` 未绑定就崩。
+    #
+    # ⚠️ 2026-09-21 修的漏检（**模型审出来的**，不是我自己发现的）：
+    # 原来只认 `workflow` 字段，于是**首帧工作流（`FF_*`，登记在 `first_frame_workflow`）
+    # 被判成"未在任何镜头表里登记"** → `SCOPE-00` 跳过全部场次检查。
+    # 后果：`WF-05`（GEO 逐字）／`WF-07/08`（身份锚与正向锁）／`WF-22`（否定枚举）
+    # 在**脸与画风真正被决定的那条工作流上全部不跑** ——
+    # 而 `check_chain` 的 `SHOT-05/06/07/08` 又是明确拿首帧工作流去查的，
+    # 两处口径互相矛盾。**静默漏检比误报更危险。**
     shot = next((s for s in (chain.get("shots") or [])
-                 if s.get("workflow") == wf_name or s.get("id") == wf_name), None)
+                 if s.get("workflow") == wf_name
+                 or s.get("first_frame_workflow") == wf_name
+                 or s.get("id") == wf_name), None)
+    is_first_frame_wf = bool(shot and shot.get("first_frame_workflow") == wf_name)
 
     # ── 这条工作流是不是「某个镜头的工作流」？──
     # **不是镜头工作流就跳过场次相关的检查。**
@@ -760,12 +792,25 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # 拿「GEO 块在不在」「签名标记写没写」去要求它们是错的。
     # **会误报的检查器比没有检查器更糟**（规矩 §5.C 第 14 条）。
     table_wfs = {s.get("workflow") for s in (chain.get("shots") or [])}
-    is_shot_wf = shot is not None or wf_name in table_wfs
+    ff_wfs = {s.get("first_frame_workflow") for s in (chain.get("shots") or [])}
+    is_shot_wf = shot is not None or wf_name in table_wfs or wf_name in ff_wfs
     if not is_shot_wf:
         rep.info("SCOPE-00",
-                 "本工作流未在任何镜头表里登记（画风探针／稳定性验证／首帧工作流）"
+                 "本工作流未在任何镜头表里登记（画风探针／稳定性验证）"
                  "→ 场次相关检查 WF-05/07/08/09/09b/10/16/18/20 已跳过")
+    elif is_first_frame_wf:
+        rep.info("SCOPE-00",
+                 f"这是镜头 {shot.get('id')} 的**首帧工作流**（t2i 静帧）"
+                 f"→ 跑画风/身份/否定枚举（WF-02/03/04/07/08/22），"
+                 f"跳过与视频有关的 WF-09/09b/10/16/20")
 
+
+    # ⚠️ **`is_video_wf`：与"成片视频"有关的检查只对镜头工作流跑。**
+    # 2026-09-21：`SCOPE-00` 原先把首帧工作流一起当成"没登记"而跳过全部检查；
+    # 修好归属识别之后要防**另一头** ——
+    # 拿"帧数 17k+5""台词落点""确认版本"去要求一张 **t2i 静帧**是荒谬的：
+    # 静帧没有帧数、没有说话、没有版本。**会误报的检查器比没有检查器更糟。**
+    is_video_wf = is_shot_wf and not is_first_frame_wf
 
     h3 = h3_nodes(wf)
     lat = [n for n in nodes if n.get("type") in
@@ -875,7 +920,17 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                      "确实需要保留的，登记到 audit_rules.json 的 negative_phrase_whitelist")
 
     # ── WF-05 GEO 空间地图必须逐字进 detailed_description（§2.3）──
-    geo = geo_block(proj, rules) if is_shot_wf else ""
+    # ⚠️ **只对视频工作流**：GEO 英文块是给 H3 的（那是"跨镜几何"的载体）。
+    # 首帧 t2i 的职责是**构图、景别、画风、脸**，它的语言口径是
+    # 「只有画风锁用中文，其余保持英文」（项目卡拍板第 2b 条），
+    # 而 GEO 那 3000 字塞进去会把画风句占比打到 3%（WF-04 必挂）——
+    # **两条判据在 t2i 上直接互斥**。所以 t2i 不要求 GEO，几何由首帧本身锁死。
+    #
+    # ⚠️ 同时**按场次取 GEO**（`chain["table"]` / 反查工作流归属）。
+    # 2026-09-21 实测：原来固定读项目级 `geo_file`，拆场次后那是 SCN-01 的摊内地图，
+    # 拿它去量 SCN-02（室外空街）必然误报"GEO 没逐字进"。
+    tbl_rel = chain.get("table") or table_for_workflow(proj, rules, wf_name)
+    geo = geo_block(proj, rules, tbl_rel) if is_video_wf else ""
     if geo:
         if norm_ws(geo) not in norm_ws(prompt):
             rep.error("WF-05",
@@ -883,7 +938,7 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                       fix="把 storyboard/GEO空间地图.md §二 的整块贴进 detailed_description")
         else:
             rep.info("WF-05", "GEO 英文块已逐字锁定")
-    elif is_shot_wf:
+    elif is_video_wf:
         rep.warn("WF-05", "audit_rules.json 没登记 geo_file，跨镜几何无从核对")
 
     # ── WF-06 禁字幕句（**只对 H3 视频成立**）──
@@ -917,7 +972,8 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                               "「不要什么」必须写进正向")
 
     # ── WF-09 台词保真（**买肉场成片的第二号病根**）──
-    if shot is not None:
+    # ⚠️ 只对**镜头工作流**跑：首帧是静帧，没有台词落点这回事。
+    if shot is not None and is_video_wf:
         beats = chain.get("beats") or {}
         owned = [b for b in (shot.get("beats") or []) if b in beats]
         expects_speech = any(beats[b]["has_dialogue"] for b in owned)
@@ -960,7 +1016,9 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
 
     # ── WF-20 语音密度：这一镜的时长装不装得下这一拍的语音 ──
     # 戏 §三 自己写死的口径：语速 5.50 汉字/秒、密度上限 75%。
-    if shot is not None:
+    # ⚠️ 只对**镜头工作流**跑：静帧没有时长。这条报出来的问题要靠改帧数或改戏解决，
+    # 而首帧工作流里根本没有帧数 —— 拿它去判首帧只会让人去改错文件。
+    if shot is not None and is_video_wf:
         beats = chain.get("beats") or {}
         owned = [b for b in (shot.get("beats") or []) if b in beats]
         nchar = sum(beats[b]["dialogue_chars"] + beats[b]["vo_chars"] for b in owned)
@@ -982,7 +1040,12 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # ── WF-10 取景必须写在描述段起始（旧线 5.11：首帧是什么构图第一句就写什么）──
     # 判据：`[Shot 1]` 标记之后紧接着就应该是取景句 —— 这是本项目四镜的写法，
     # 也正好把前面那一段画风句与 GEO 块排除在外，不会因为锁定件长而误报。
-    if shot is not None:
+    #
+    # ⚠️ **只对视频工作流**：这条防的是"H3 拿到的文字构图与首帧不一致 → 它真的移机位"。
+    # 首帧 t2i 自己**就是**构图，没有"文字与图不一致"这回事；
+    # 而且 t2i 的取景句为了压住画风占比会被**有意精简**（见 `framing_en_compact`），
+    # 拿完整句去比对必然误报（2026-09-21 实测）。
+    if shot is not None and is_video_wf:
         want = norm_ws(shot.get("framing_en") or shot.get("shot_size") or "")
         m = re.search(r"\[\s*shot\s*1\s*\]", styled, re.I)
         if m:
@@ -1003,7 +1066,8 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                           "并在背景留下一个重复的人")
 
     # ── WF-11 帧数 17k+5 ──
-    if h3:
+    # ⚠️ 只对**视频工作流**跑：t2i 静帧没有帧数（`EmptySD3LatentImage` 的第三个值是**批量张数**）
+    if h3 and is_video_wf:
         wv = h3[0].get("widgets_values") or []
         if len(wv) >= 4 and isinstance(wv[3], int):
             n = wv[3]
@@ -1066,8 +1130,11 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             break
 
     # ── WF-14 防跳轴句（**只在没登记 GEO 块时兜底**，且只对镜头工作流）──
+    # ⚠️ 用 `is_video_wf` 而不是 `is_shot_wf`：轴是**摄像机跨镜不越线**的约束，
+    # 那是视频层面的事。首帧 t2i 一旦也被算进来，`geo` 恒为空（WF-05 只给视频取 GEO），
+    # 于是这条兜底句会在**每条首帧工作流上恒定误报**（2026-09-21 实测）。
     anchor = rules.get("axis_sentence")
-    if anchor and is_shot_wf and not geo and norm_ws(anchor).lower() not in norm_ws(prompt).lower():
+    if anchor and is_video_wf and not geo and norm_ws(anchor).lower() not in norm_ws(prompt).lower():
         rep.error("WF-14", "缺防跳轴句（GEO 的 screen direction rule 必须逐字在提示词里）",
                   expect=anchor[:90] + "…")
 
@@ -1094,7 +1161,8 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
 
     # ── WF-16 工作流自洽：SaveVideo 前缀 / LoadImage 必须与镜头表登记的一致 ──
     # 一个工作流文件被反复改写成四镜，最容易留下的就是这种"串档"。
-    if shot is not None:
+    # ⚠️ 只对**视频工作流**跑：t2i 首帧没有 `SaveVideo`，也没有"喂首帧"这回事。
+    if shot is not None and is_video_wf:
         sv = next((n for n in nodes if n.get("type") == "SaveVideo"), None)
         if sv:
             prefix = (sv.get("widgets_values") or [""])[0] or ""
@@ -1105,9 +1173,13 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                           fix="一镜一条工作流，不许反复改写同一个文件")
         li = next((n for n in nodes if n.get("type") == "LoadImage"), None)
         if li:
-            got = (li.get("widgets_values") or [""])[0]
+            got = (li.get("widgets_values") or [""])[0] or ""
             want = shot.get("first_frame")
-            if want and got and got != want:
+            # ⚠️ ComfyUI 的 `LoadImage` 写的是**上传后的引用**，可能带输出子目录
+            # （`meishi/FF_…png`），而镜头表登记的是**落盘后的文件名**（`FF_…png`）。
+            # 两者指的是同一张图，判据要比文件名而不是路径字符串 ——
+            # 否则会把一个正确的工作流报成串档（2026-09-21 实测）。
+            if want and got and got.split("/")[-1] != want.split("/")[-1]:
                 rep.error("WF-16",
                           f"LoadImage 用的是 `{got}`，镜头表登记的首帧是 `{want}`")
 
@@ -1115,7 +1187,11 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # 2026-09-21 的实情：`prompts/` 是**空的**，提示词只活在工作流 JSON 里。
     # 后果是致命的 —— 四镜共用一个工作流反复改写，S02 的提示词被覆盖后**无处可寻**，
     # 既不能 diff、也不能复盘"当时到底发了什么"。
-    if shot is not None:
+    # ⚠️ 只对**视频工作流**跑：`sync-prompts` 收的是 `prompts/<镜号>.prompt.md`，
+    # 那对应的是成片提示词。首帧提示词目前**没有单独归档的一层** ——
+    # 它活在工作流里，而工作流一镜一条、不会被覆盖，所以暂时不构成丢失风险。
+    # （**这是一处已知缺口**：首帧提示词没有可 diff 的纯文本。见 pipeline/docs/03 待办。）
+    if shot is not None and is_video_wf:
         sid = shot.get("id")
         pf = proj / "prompts" / f"{sid}.prompt.md"
         if sid and not pf.exists():
@@ -1167,9 +1243,21 @@ def subject_files(proj: Path, subject: str, rules: dict) -> dict:
         p = proj / "workflows" / f"{subject}.json"
         if p.exists():
             out[str(p.relative_to(proj))] = p
-        for rel in (rules.get("script"), rules.get("shot_table"), rules.get("geo_file")):
+        # ── 按**这一条工作流所属的场次**绑锁定件 ──
+        # 2026-09-21 拆场次后修：原来固定绑项目级的 script / shot_table / geo_file，
+        # 于是审 SCN-02 的工作流时绑的却是 SCN-01 的摊内 GEO —— 改了真正相关的那份
+        # （`SCN02_GEO空间地图.md`）**封条不会过期**。
+        tbl_rel = table_for_workflow(proj, rules, subject) or rules.get("shot_table")
+        try:
+            tbl = json.loads(read(proj / tbl_rel)) if tbl_rel else {}
+        except (OSError, ValueError):
+            tbl = {}
+        sid_now = str(tbl.get("scene") or "").strip()
+        plan = scene_plan(rules, sid_now)
+        for rel in (plan.get("script") or rules.get("script"),
+                    tbl_rel, geo_rel_for(proj, rules, tbl_rel)):
             if rel and (proj / rel).exists():
-                out[rel] = proj / rel
+                out[str(rel)] = proj / rel
         out["audit_rules.json"] = proj / "audit_rules.json"
 
         # ── SEAL-01：**首帧血缘与提示词归档也必须绑进封条**（子 agent 2026-09-21 实测的漏洞）──
@@ -1177,16 +1265,19 @@ def subject_files(proj: Path, subject: str, rules: dict) -> dict:
         # 于是**改了首帧提示词，这一镜的封条不会过期，verify 照样报"封条有效"**。
         # 而画风与身份恰恰是首帧那条工作流决定的（SHOT-05/06、WF-22、WF-07/08 说的都是它）。
         # "改了提示词就必须重新审"这条在首帧一侧原本是漏的。
-        try:
-            tbl = json.loads(read(proj / rules["shot_table"])) if rules.get("shot_table") else {}
-        except (OSError, ValueError):
-            tbl = {}
+        #
+        # ⚠️ 2026-09-21 再修：原来只认 `s["workflow"] == subject`，
+        # 于是**首帧工作流匹配不上任何一行**，链不到它那一镜的提示词归档。
+        # 现在**两种角色都认**（视频工作流／首帧工作流），并且对首帧工作流
+        # 额外把**视频工作流**也绑上（两者共同决定成片）。
         for s in tbl.get("shots") or []:
-            if s.get("workflow") != subject:
+            is_video = s.get("workflow") == subject
+            is_ff = s.get("first_frame_workflow") == subject
+            if not (is_video or is_ff):
                 continue
-            fw = s.get("first_frame_workflow")
-            if fw and (proj / "workflows" / f"{fw}.json").exists():
-                out[f"workflows/{fw}.json"] = proj / "workflows" / f"{fw}.json"
+            other = s.get("first_frame_workflow") if is_video else s.get("workflow")
+            if other and (proj / "workflows" / f"{other}.json").exists():
+                out[f"workflows/{other}.json"] = proj / "workflows" / f"{other}.json"
             pf = proj / "prompts" / f"{s.get('id')}.prompt.md"
             if pf.exists():
                 out[str(pf.relative_to(proj))] = pf
@@ -1218,8 +1309,14 @@ def cmd_preflight(proj: Path, wf_name: str, rules: dict, as_json: bool) -> int:
     # 多场次：先认这条工作流属于哪一场，用那一场的链 —— **不许拿别的场的镜头表去判它**
     rel = table_for_workflow(proj, rules, wf_name)
     crep, chain = _chain_for(proj, rules, rel)
+    # ⚠️ **同一份链再跑一遍 pending 档**，两批条目都写进审计包：
+    # `errors` 是"做错了"，`pending` 是"还没做"。
+    # 封条要放行后者、拦住前者；没有这个区分就只能把"首帧还没出"当成错，
+    # 于是**首帧工作流永远封不了**（那张图正是它自己要跑的）。
+    crep_p, _chain_p = check_chain(proj, rules, materials="pending", table_rel=rel)
     rep, packet = check_workflow(proj, wf_name, rules, chain)
     packet["chain"] = crep.dump()
+    packet["chain_pending"] = crep_p.dump()
     PACKET_DIR.mkdir(parents=True, exist_ok=True)
     pf = PACKET_DIR / f"{proj.name}.{wf_name}.packet.json"
     pf.write_text(json.dumps(packet, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1268,12 +1365,20 @@ def cmd_seal(proj: Path, subject: str, verdict_file: str, rules: dict) -> int:
     # 例外：链上的错**点名了这条工作流**（`SHOT-05 …出自 FF_EP02SC01_shot`、
     # `SHOT-06 首帧工作流 X 被 4 镜共用`）→ 那确实是它的错，要拦。
     pf = PACKET_DIR / f"{proj.name}.{subject}.packet.json"
-    mech_errors = []
+    mech_errors, mech_pending = [], []
     if pf.exists():
         pk = json.loads(read(pf))
         mech_errors = list((pk.get("mechanical") or {}).get("errors") or [])
-        mech_errors += [e for e in ((pk.get("chain") or {}).get("errors") or [])
-                        if subject in str(e.get("msg", ""))]
+        # ⚠️ 链上的错**按 pending 档取**（`chain_pending`），不按严格档（`chain`）。
+        # 两档的区别就是「产物还没产出算不算错」：
+        #   严格档：算（S8 推 GPU 之前该用的口径）
+        #   pending 档：不算（写提示词／封存时该用的口径）
+        # 封条用严格档的话，**首帧工作流永远封不了** ——
+        # 它自己那条 `SHOT-02`（首帧图还没出）是可预期的，那张图就是要跑它才有的。
+        mech_errors += [e for e in ((pk.get("chain_pending") or {}).get("items") or [])
+                        if e.get("level") == "ERROR" and subject in str(e.get("msg", ""))]
+        mech_pending = [e for e in ((pk.get("chain_pending") or {}).get("items") or [])
+                        if e.get("level") == "PENDING" and subject in str(e.get("msg", ""))]
     waived = {w.get("code") for w in (v.get("waivers") or [])}
     if not all(w.get("reason") for w in (v.get("waivers") or [])):
         raise SystemExit("❌ 每条 waiver 都必须写 reason")
@@ -1291,9 +1396,17 @@ def cmd_seal(proj: Path, subject: str, verdict_file: str, rules: dict) -> int:
     if pf.exists():
         v["packet"] = str(pf.relative_to(ROOT))
         v["mechanical_at_seal"] = {"errors": len(mech_errors)}
+    if mech_pending:
+        # **封存时还缺什么，写在封条里** —— 事后复盘时这是关键信息
+        v["materials_pending"] = [{"code": e["code"], "msg": e["msg"][:200]}
+                                  for e in mech_pending]
     out = audit_path(proj, subject)
     out.write_text(json.dumps(v, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"🔒 已封存 {out.relative_to(ROOT)}（绑定 {len(files)} 个文件）")
+    if mech_pending:
+        print(f"   ⏳ 封存时仍有 {len(mech_pending)} 项产物未产出（已记进封条）：")
+        for e in mech_pending[:3]:
+            print(f"      [{e['code']}] {e['msg'][:110]}")
     print(f"   判定：{v['verdict']}　findings：{len(v['findings'])}")
     return 0 if v["verdict"] == "pass" else 1
 

@@ -531,50 +531,84 @@ def gate_S4(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
 
 
 def gate_S5(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
+    """验资产 = 核「这份清单对不对」，**不是核「图出了没有」**。
+
+    ⚠️ 2026-09-21 修的判据错位（与 S2/S3 同一类病）：
+    S4 的产出**就是**这份清单，而清单里登记的资产图要等**之后**去出。
+    原来把"图不在盘上"报 ERROR，于是 S4 永远过不去 ——
+    模型跑满 3 轮、把图片路径越改越离谱（实测第 3 轮它开始编 `PROP/PROP01_phone_alarm_00001.png`）。
+
+    现在的分档：
+    - **S5（这里）**：「清单自己合不合规矩」—— 每项有 id／有图登记／**真的被镜头表引用**。
+    - **图在不在盘上**：PENDING。到**推 GPU 之前的 S8** 才提成 ERROR
+      （`PA.check_chain` 那一侧同理；图是 `run.py` 出的，不是写清单时就在的）。
+    """
     r = Rep("S5")
     f = proj / "storyboard" / f"{scene['id']}_资产清单.json"
     if not f.exists():
         r.e("S5-01", "资产清单不在（S4 没过）")
         return r
     m = json.loads(read(f))
-    shots_txt = json.dumps(scene.get("t") or {}, ensure_ascii=False)
+    tbl = scene.get("t") or {}
+    shots_txt = json.dumps(tbl, ensure_ascii=False)
+    # 镜头表里这一场用了哪些资产图 —— 两种登记方式都认：
+    #   ① 镜头对象的 `assets` 字段（规范 §P3 的 @锚点，结构化）
+    #   ② 资产 id 直接出现在镜头表任何位置（老写法，兼容）
+    per_shot: dict[str, list[str]] = {}
+    for s in tbl.get("shots") or []:
+        per_shot[s.get("id")] = list(s.get("assets") or [])
     for key in ("characters", "props", "scenes"):
         for a in (m.get(key) or []):
             aid = a.get("id", "?")
             files = a.get("files") or []
             if not files:
                 r.e("S5-02", f"{aid} 没有登记任何资产图文件",
-                    fix="01_资产规范 §〇：无图不进分镜")
+                    fix="01_资产规范 §〇：无图不进分镜。**先出图，再把路径登记进来**；"
+                        "还没出的图不算错，但必须有一个明确的路径")
             for rel in files:
                 if not (proj / "assets" / rel).exists() and \
                    not (proj / "outputs" / rel).exists():
-                    r.e("S5-03", f"{aid} 的图不在盘上：{rel}")
+                    # 图还没出 = 待产出，不是错
+                    r.p("S5-03", f"{aid} 的图还没出：{rel}")
             # **资产必须真的被这一场的镜头用上** —— 买肉场就是资产做完了、一镜没用
-            if aid not in shots_txt:
+            cited = [sid for sid, lst in per_shot.items() if aid in lst]
+            if not cited and aid not in shots_txt:
                 r.e("S5-04",
                     f"{aid} 在镜头表里**一次都没被引用** —— 做了资产却没用，"
                     f"成片和资产层脱钩",
-                    fix="在镜头表里把该资产挂到用到它的镜头上；确实不用就删掉这一项")
+                    fix="在镜头表的镜头对象里加 `assets` 字段挂上它；确实不用就删掉这一项")
     if r.ok():
-        r.i("S5-OK", "清单 schema / 图在位 / 被分镜引用 全部通过")
+        pend = len(r.pendings)
+        r.i("S5-OK", "清单 schema / 被分镜引用 通过"
+                     + (f"；另有 {pend} 张资产图**还没出**（轮到 S8 推 GPU 之前再拦）"
+                        if pend else ""))
     return r
 
 
 def gate_S6(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
     """写提示词：每镜跑全套 WF-* 不变量。
 
-    这里**是"文件必须在"的第一关** —— S6 的产出就是 `workflows/*.json` 与
-    `prompts/<镜号>.prompt.md`。所以用 `materials="error"`：S6 说写完了，
-    那些文件就必须真在。这是 S2/S3 那批 PENDING 兑现的地方。
+    **S6 的产出是「工作流文件」，不是「图」。** 所以：
+
+    - `workflows/*.json` **必须真在** → 用 `materials="error"`
+      （那是 S6 自己刚写的东西，S2/S3 那批 PENDING 在这里兑现）。
+    - **首帧图不在不算错** → 那是「跑这条工作流」的结果，属于 S8。
+      ⚠️ 2026-09-21 实测：这一关原来连首帧图一起要求，于是 **S6 永远过不去** ——
+      因为首帧正是拿 S6 刚写的这条工作流去跑才有的。**又一处先有鸡还是先有蛋。**
+      真正该拦的时点是 S8（要推 GPU 了）。S6 只判「提示词对不对」，
+      因为那是**还没出图时唯一能判的东西**（画风句、GEO、身份锚、台词、禁字幕）。
     """
     r = Rep("S6")
-    # 产物此刻必须都在：**S2/S3 放行的 PENDING 在这里兑现**
-    _crep, chain = PA.check_chain(proj, rules, materials="error",
+    # 工作流文件必须都在；**首帧图允许还没出**（那是 S8 的事）
+    _crep, chain = PA.check_chain(proj, rules, materials="pending",
                                   table_rel=scene.get("file"))
     for it in _crep.items:
-        if it["level"] == "ERROR":
-            r.e(it["code"], it["msg"],
-                **{k: v for k, v in it.items() if k not in ("level", "code", "msg")})
+        lv = it["level"]
+        extra = {k: v for k, v in it.items() if k not in ("level", "code", "msg")}
+        if lv == "ERROR":
+            r.e(it["code"], it["msg"], **extra)
+        elif lv == "PENDING":
+            r.p(it["code"], it["msg"], **extra)
     done = 0
     for s in (scene.get("t") or {}).get("shots") or []:
         wf = s.get("workflow")
@@ -591,7 +625,9 @@ def gate_S6(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
                 **{k: v for k, v in it.items() if k not in ("level", "code", "msg")})
         done += 1
     if done and r.ok():
-        r.i("S6-OK", f"{done} 条工作流的提示词不变量全部通过")
+        pend = len(r.pendings)
+        r.i("S6-OK", f"{done} 条工作流的提示词不变量全部通过"
+                     + (f"；另有 {pend} 项产物待出（首帧图等，轮到 S8 拦）" if pend else ""))
     return r
 
 
@@ -622,6 +658,31 @@ def gate_S8(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
     **产物必须晚于它那一条封条**，否则它不是被审过的那一版。
     """
     r = Rep("S8")
+    # ── 到这一刻，**首帧图必须真在盘上** ──
+    # 首帧是"跑 S6 写的那条工作流"出来的。S6 放行它是因为当时还没跑；
+    # 到了要推 GPU 这一刻还不在，就是真缺件 —— S2/S6 那批 PENDING 在这里兑现。
+    _crep, _chain = PA.check_chain(proj, rules, materials="pending",
+                                   table_rel=scene.get("file"))
+    for it in _crep.items:
+        if it["level"] == "PENDING":
+            r.e(it["code"], f"要推 GPU 了，这项还不在：{it['msg']}",
+                **{k: v for k, v in it.items() if k not in ("level", "code", "msg")})
+    # ── 资产图也必须都在（S5 放行的 PENDING 在这里兑现）──
+    am = proj / "storyboard" / f"{scene['id']}_资产清单.json"
+    if am.exists():
+        try:
+            man = json.loads(read(am))
+            for key in ("characters", "props", "scenes"):
+                for a in (man.get(key) or []):
+                    for rel in (a.get("files") or []):
+                        if not (proj / "assets" / rel).exists() and \
+                           not (proj / "outputs" / rel).exists():
+                            r.e("S8-05",
+                                f"要推 GPU 了，资产 {a.get('id')} 的图还不在盘上：{rel}",
+                                fix="先出这张资产图并归档，再推 GPU —— "
+                                    "01_资产规范 §〇：无图不进分镜")
+        except ValueError:
+            r.w("S8-06", f"资产清单不是合法 JSON：{am.name}")
     for s in (scene.get("t") or {}).get("shots") or []:
         sid = s.get("id")
         wf = s.get("workflow")
@@ -1420,6 +1481,7 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
       "first_frame": "首帧文件名.png",
       "first_frame_workflow": "出首帧的工作流名",
       "workflow": "这一镜的 H3 工作流名（一镜一个，不许共用）",
+      "assets": ["CHR-01", "SCN-02"],
       "content": "这一镜演什么"}}
   ]
 }}
@@ -1432,6 +1494,9 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
 - 一镜一条首帧工作流，**`first_frame_workflow` 也不许两镜共用**。
 - 每镜必须有独立的 first_frame。
 - beats 里的编号必须真实存在于上面的戏里。
+- **`assets` 必须写全这一镜真的用到的资产**（角色／道具／场景的 id）。
+  这是 `01_资产规范` §P3 的 `@锚点` —— 没有它，"资产做完了却一镜没用"就无人发现。
+  编号前缀照规范：角色 `CHR-<两位>`、场景 `SCN-<两位>`、道具 `PRP-<两位>`。
 - **每条 `content` 一句话说完**（这是给人的摘要，不是剧本）；`framing_en` 一行。
 
 ## 命名规则（**必须照抄格式，编号随镜号变**）
@@ -1548,12 +1613,708 @@ def _gen_once(proj: Path, stage_id: str, rules: dict, scene: dict,
     return False, errs
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  S6：写提示词与工作流 —— **模板法**
+#
+#  用户 2026-09-21 的架构要求：「模型负责生成和审查，执行面交给电脑」。
+#  工作流是一张**几十个节点、二十几条连线**的图，让模型从零写必然出错
+#  （节点 id 与 link id 对不上、连线指错端口 —— 而且这类错**在跑之前看不出来**）。
+#
+#  所以 S6 这样分工：
+#
+#  | 谁 | 干什么 |
+#  |---|---|
+#  | **程序** | 画节点图与连线（照已验证过的模板）／拼装全部锁定件 —— 画风句、GEO 英文块、 |
+#  |          | 角色签名标记与正向否定锁、戏里的对白与 VO 原文、禁字幕句、帧数画布种子 |
+#  | **模型** | 只写「镜次专属」的剧作文本：动作分段时间轴、音景、配乐、以及每个 Subject |
+#  |          | 在拍内怎么演化 |
+#
+#  这样**锁定件不可能被模型改写或漏掉**（规矩 §5.C.12 的正解：
+#  别指望模型记住，把它该记的东西从它手里拿走）。
+# ══════════════════════════════════════════════════════════════════════
+
+#: 首帧 t2i 的固定节点骨架（节点 id, 类型, 位置, widgets）。
+#: 与实测生效的 `STYLE_I_H_mature.json` **同一套节点**（那是判过 pass 的画风标尺）。
+T2I_GRAPH = [
+    (1, "UNETLoader", [40, 40], ["qwen_image_2512_fp8_e4m3fn.safetensors", "default"]),
+    (2, "CLIPLoader", [40, 170], ["qwen_2.5_vl_7b_fp8_scaled.safetensors", "qwen_image", "default"]),
+    (3, "VAELoader", [40, 324], ["qwen_image_vae.safetensors"]),
+    (4, "LoraLoaderModelOnly", [40, 430],
+     ["Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors", 1.0]),
+    (5, "CLIPTextEncode", [500, 40], None),          # ← 正向提示词（程序拼）
+    (6, "CLIPTextEncode", [500, 370], [""]),         # ← 负向，CFG 1.0 下无效，保持空
+    (7, "EmptySD3LatentImage", [500, 520], [1376, 768, 1]),
+    (8, "KSampler", [1180, 40], None),               # ← 种子在这里，程序填
+    (9, "VAEDecode", [1180, 340], []),
+    (10, "SaveImage", [1180, 420], None),            # ← 前缀，程序填
+]
+
+#: H3 Ref2VA 的固定节点骨架。数值全部来自**已验证过的那条** S01 工作流
+#: （`workflows/EP02SC01_S01_h3.json`，它真出过 175 帧的成片）。
+H3_MODELS = {
+    "unet": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "lora": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    "clip": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "vae_video": "minimax_h3_video_vae_fp16.safetensors",
+    "vae_audio": "minimax_h3_audio_vae_fp32.safetensors",
+}
+
+
+def build_t2i_workflow(prompt: str, prefix: str, seed: int, note: str = "",
+                       canvas=(1376, 768), steps: int = 8) -> dict:
+    """出首帧用的 t2i 工作流。**节点图由程序画，模型碰不到。**"""
+    nodes, links = [], []
+    by_id = {nid: (typ, pos, wv) for nid, typ, pos, wv in T2I_GRAPH}
+    wv5 = [prompt]
+    wv7 = [int(canvas[0]), int(canvas[1]), 1]
+    wv8 = [seed, "fixed", steps, 1.0, "euler", "simple", 1.0]
+    wv10 = [prefix]
+    for nid, typ, pos, wv in T2I_GRAPH:
+        wv = {5: wv5, 7: wv7, 8: wv8, 10: wv10}.get(nid, wv)
+        nodes.append({
+            "id": nid, "type": typ, "pos": pos,
+            "size": {1: [420, 82], 2: [420, 106], 3: [420, 58], 4: [420, 82],
+                     5: [640, 420], 6: [420, 120], 7: [420, 106], 8: [320, 262],
+                     9: [220, 46], 10: [420, 300]}[nid],
+            "flags": {}, "order": nid - 1, "mode": 0,
+            "inputs": {4: [{"name": "model", "type": "MODEL", "link": 1}],
+                       5: [{"name": "clip", "type": "CLIP", "link": 3}],
+                       6: [{"name": "clip", "type": "CLIP", "link": 4}],
+                       8: [{"name": "model", "type": "MODEL", "link": 2},
+                           {"name": "positive", "type": "CONDITIONING", "link": 5},
+                           {"name": "negative", "type": "CONDITIONING", "link": 6},
+                           {"name": "latent_image", "type": "LATENT", "link": 7}],
+                       9: [{"name": "samples", "type": "LATENT", "link": 8},
+                           {"name": "vae", "type": "VAE", "link": 9}],
+                       10: [{"name": "images", "type": "IMAGE", "link": 10}]}.get(nid, []),
+            "outputs": {1: [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+                        2: [{"name": "CLIP", "type": "CLIP", "links": [3, 4], "slot_index": 0}],
+                        3: [{"name": "VAE", "type": "VAE", "links": [9], "slot_index": 0}],
+                        4: [{"name": "MODEL", "type": "MODEL", "links": [2], "slot_index": 0}],
+                        5: [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
+                        6: [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
+                        7: [{"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 0}],
+                        8: [{"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}],
+                        9: [{"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}],
+                        10: []}.get(nid, []),
+            "widgets_values": wv,
+            "properties": {"Node name for S&R": typ},
+        })
+        # 注意：**outputs[].links 与顶层 links 都要写**（规矩 §8 坑 1 说的是
+        # 「判连通性必须用顶层 links」—— 不是说 outputs 可以空着）
+    links = [[1, 1, 0, 4, 0, "MODEL"], [2, 4, 0, 8, 0, "MODEL"],
+             [3, 2, 0, 5, 0, "CLIP"], [4, 2, 0, 6, 0, "CLIP"],
+             [5, 5, 0, 8, 1, "CONDITIONING"], [6, 6, 0, 8, 2, "CONDITIONING"],
+             [7, 7, 0, 8, 3, "LATENT"], [8, 8, 0, 9, 0, "LATENT"],
+             [9, 3, 0, 9, 1, "VAE"], [10, 9, 0, 10, 0, "IMAGE"]]
+    if note:
+        nodes.append({
+            "id": 11, "type": "MarkdownNote", "pos": [1660, 40], "size": [640, 620],
+            "flags": {}, "order": 11, "mode": 0, "inputs": [], "outputs": [],
+            "widgets_values": [note],
+            "properties": {"Node name for S&R": "MarkdownNote"},
+        })
+    return {"last_node_id": nodes[-1]["id"], "last_link_id": 10, "nodes": nodes,
+            "links": links, "groups": [], "config": {}, "extra": {}, "version": 0.4}
+
+
+def build_h3_workflow(prompt: str, first_frame: str, prefix: str, seed: int,
+                      frames: int, canvas=(1376, 768), note: str = "") -> dict:
+    """H3 Ref2VA 视频工作流。**六段式提示词由程序拼，模型只供剧作文本。**"""
+    C = int(canvas[0]); H = int(canvas[1])
+    N = [
+        (1, "UNETLoader", [40, 40], [H3_MODELS["unet"], "default"]),
+        (2, "LoraLoaderModelOnly", [40, 170], [H3_MODELS["lora"], 1.0]),
+        (3, "CLIPLoader", [40, 300], [H3_MODELS["clip"], "minimax", "default"]),
+        (4, "VAELoader", [40, 450], [H3_MODELS["vae_video"]]),
+        (5, "VAELoader", [40, 550], [H3_MODELS["vae_audio"]]),
+        (6, "LoadImage", [40, 650], [first_frame, "image"]),
+        # ⚠️ MiniMaxH3 节点的 widgets_values 布局：`[提示词, 宽, 高, 帧数]`。
+        # 2026-09-21 实测：只给提示词的话 WF-11 说"布局与预期不同，帧数检查跳过" ——
+        # **静默漏检**（画布与帧数两条最重要的机械不变量都没人查了）。
+        (7, "MiniMaxH3ReferenceToVideo", [520, 40], [prompt, C, H, int(frames)]),
+        (8, "RandomNoise", [1280, 40], [seed, "fixed"]),
+        (9, "BasicGuider", [1280, 170], []),
+        (10, "KSamplerSelect", [1280, 260], ["res_multistep"]),
+        (11, "BasicScheduler", [1280, 360], ["simple", 4, 1.0]),
+        (12, "SamplerCustomAdvanced", [1660, 40], []),
+        (13, "VAEDecode", [1660, 220], []),
+        (14, "VAEDecodeAudio", [1660, 300], []),
+        (15, "CreateVideo", [1960, 40], [24.0]),
+        (16, "SaveVideo", [1960, 200], [prefix, "auto", "auto"]),
+    ]
+    SIZE = {1: [420, 82], 2: [420, 82], 3: [420, 106], 4: [420, 58], 5: [420, 58],
+            6: [320, 320], 7: [720, 560], 8: [320, 82], 9: [320, 46], 10: [320, 58],
+            11: [320, 106], 12: [300, 130], 13: [220, 46], 14: [220, 46],
+            15: [300, 106], 16: [420, 300]}
+    IN = {
+        2: [{"name": "model", "type": "MODEL", "link": 1}],
+        6: [],
+        7: [{"name": "clip", "type": "CLIP", "link": 2},
+            {"name": "vae", "type": "VAE", "link": 3},
+            {"name": "audio_vae", "type": "VAE", "link": 4},
+            {"name": "ref_images.ref_image_0", "type": "IMAGE", "link": 5}],
+        9: [{"name": "model", "type": "MODEL", "link": 9},
+            {"name": "conditioning", "type": "CONDITIONING", "link": 10}],
+        11: [{"name": "model", "type": "MODEL", "link": 11}],
+        12: [{"name": "noise", "type": "NOISE", "link": 12},
+             {"name": "guider", "type": "GUIDER", "link": 13},
+             {"name": "sampler", "type": "SAMPLER", "link": 14},
+             {"name": "sigmas", "type": "SIGMAS", "link": 15},
+             {"name": "latent_image", "type": "LATENT", "link": 16}],
+        13: [{"name": "samples", "type": "LATENT", "link": 17},
+             {"name": "vae", "type": "VAE", "link": 18}],
+        14: [{"name": "samples", "type": "LATENT", "link": 19},
+             {"name": "vae", "type": "VAE", "link": 20}],
+        15: [{"name": "images", "type": "IMAGE", "link": 21},
+             {"name": "audio", "type": "AUDIO", "link": 22}],
+        16: [{"name": "video", "type": "VIDEO", "link": 23}],
+    }
+    OUT = {
+        1: [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+        2: [{"name": "MODEL", "type": "MODEL", "links": [9, 11], "slot_index": 0}],
+        3: [{"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}],
+        4: [{"name": "VAE", "type": "VAE", "links": [3, 18, 20], "slot_index": 0}],
+        5: [{"name": "VAE", "type": "VAE", "links": [4, 19], "slot_index": 0}],
+        6: [{"name": "IMAGE", "type": "IMAGE", "links": [5], "slot_index": 0},
+            {"name": "MASK", "type": "MASK", "links": None, "slot_index": 1}],
+        7: [{"name": "positive", "type": "CONDITIONING", "links": [10], "slot_index": 0},
+            {"name": "LATENT", "type": "LATENT", "links": [16], "slot_index": 1}],
+        8: [{"name": "NOISE", "type": "NOISE", "links": [12], "slot_index": 0}],
+        9: [{"name": "GUIDER", "type": "GUIDER", "links": [13], "slot_index": 0}],
+        10: [{"name": "SAMPLER", "type": "SAMPLER", "links": [14], "slot_index": 0}],
+        11: [{"name": "SIGMAS", "type": "SIGMAS", "links": [15], "slot_index": 0}],
+        12: [{"name": "LATENT", "type": "LATENT", "links": [17, 19], "slot_index": 0}],
+        13: [{"name": "IMAGE", "type": "IMAGE", "links": [21], "slot_index": 0}],
+        14: [{"name": "AUDIO", "type": "AUDIO", "links": [22], "slot_index": 0}],
+        15: [{"name": "VIDEO", "type": "VIDEO", "links": [23], "slot_index": 0}],
+        16: [],
+    }
+    nodes = [{"id": i, "type": t, "pos": p, "size": SIZE[i], "flags": {},
+              "order": k, "mode": 0, "inputs": IN.get(i, []), "outputs": OUT.get(i, []),
+              "widgets_values": wv, "properties": {"Node name for S&R": t}}
+             for k, (i, t, p, wv) in enumerate(N)]
+    if note:
+        nodes.append({"id": 17, "type": "MarkdownNote", "pos": [2420, 40],
+                      "size": [600, 720], "flags": {}, "order": len(N), "mode": 0,
+                      "inputs": [], "outputs": [], "widgets_values": [note],
+                      "properties": {"Node name for S&R": "MarkdownNote"}})
+    links = [[1, 1, 0, 2, 0, "MODEL"], [2, 3, 0, 7, 0, "CLIP"],
+             [3, 4, 0, 7, 1, "VAE"], [4, 5, 0, 7, 2, "VAE"],
+             [5, 6, 0, 7, 3, "IMAGE"], [9, 2, 0, 9, 0, "MODEL"],
+             [10, 7, 0, 9, 1, "CONDITIONING"], [11, 2, 0, 11, 0, "MODEL"],
+             [12, 8, 0, 12, 0, "NOISE"], [13, 9, 0, 12, 1, "GUIDER"],
+             [14, 10, 0, 12, 2, "SAMPLER"], [15, 11, 0, 12, 3, "SIGMAS"],
+             [16, 7, 1, 12, 4, "LATENT"], [17, 12, 0, 13, 0, "LATENT"],
+             [18, 4, 0, 13, 1, "VAE"], [19, 12, 0, 14, 0, "LATENT"],
+             [20, 5, 0, 14, 1, "VAE"], [21, 13, 0, 15, 0, "IMAGE"],
+             [22, 14, 0, 15, 1, "AUDIO"], [23, 15, 0, 16, 0, "VIDEO"]]
+    _ = (C, frames)          # 画布与帧数由 H3 节点从首帧推出；这里只留接口
+    return {"last_node_id": nodes[-1]["id"], "last_link_id": 23, "nodes": nodes,
+            "links": links, "groups": [], "config": {}, "extra": {}, "version": 0.4}
+
+
+# ── 拼装锁定件（**这些字一个都不许模型改**）────────────────────────────
+def style_lock_text(rules: dict) -> str:
+    """画风锁定句的原文（项目卡里逐字确认过的那一条）。"""
+    locks = rules.get("style_locks") or {}
+    for _nm, txt in locks.items():
+        if txt:
+            return txt
+    return ""
+
+
+def geo_block_text(proj: Path, rules: dict, scene: dict) -> str:
+    """本场 GEO 空间地图的英文块（§2.3 要求逐字进 H3 提示词）。"""
+    rel = (scene.get("t") or {}).get("geo") or rules.get("geo_file")
+    if not rel:
+        return ""
+    f = proj / rel
+    if not f.exists():
+        return ""
+    lines = read(f).splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        if "英文版" in ln:
+            start = i
+            break
+    if start is None:
+        return ""
+    body, fence = [], False
+    for ln in lines[start:]:
+        if ln.strip().startswith("```"):
+            if fence:
+                break
+            fence = True
+            continue
+        if fence:
+            body.append(ln)
+    return "\n".join(body).strip()
+
+
+def shot_for_ff_workflow(scene: dict, wf_name: str) -> dict:
+    """某条首帧工作流属于这一场次的哪个镜头。找不到返回 {}。"""
+    for s in (scene.get("t") or {}).get("shots") or []:
+        if s.get("first_frame_workflow") == wf_name:
+            return s
+    return {}
+
+
+def p1_assets(proj: Path, rules: dict, scene: dict, shot: dict) -> dict:
+    """这一镜用到的资产明细（从资产清单里按 `assets` 字段取）。"""
+    am = proj / "storyboard" / f"{scene['id']}_资产清单.json"
+    out = {"characters": [], "props": [], "scenes": []}
+    if not am.exists():
+        return out
+    try:
+        man = json.loads(read(am))
+    except ValueError:
+        return out
+    want = set(shot.get("assets") or [])
+    for key in ("characters", "props", "scenes"):
+        for a in (man.get(key) or []):
+            if a.get("id") in want:
+                out[key].append(a)
+    return out
+
+
+def _beats_of(proj: Path, rules: dict, scene: dict) -> dict:
+    plan = PA.scene_plan(rules, scene["id"])
+    rel = plan.get("script") or rules.get("script")
+    f = proj / rel if rel else None
+    return PA.parse_script(f) if f and f.exists() else {}
+
+
+def _lines_of(beats: dict, shot: dict) -> tuple[list[str], list[str]]:
+    """这一镜认领的节拍里的（对白, VO）原文 —— **逐字，来自戏**。"""
+    dlg, vo = [], []
+    for b in shot.get("beats") or []:
+        if b in beats:
+            dlg += beats[b]["channels"]["对白"]
+            vo += beats[b]["channels"]["VO"]
+    return dlg, vo
+
+
+def geo_cn_block(proj: Path, rel: str | None) -> str:
+    """GEO 文件的中文版块（``` 内的那段）。"""
+    if not rel or not (proj / rel).exists():
+        return ""
+    lines = read(proj / rel).splitlines()
+    on, body, fence = False, [], False
+    for ln in lines:
+        if ln.startswith("## 一、"):
+            on = True
+            continue
+        if on and ln.startswith("## 二、"):
+            break
+        if on and ln.strip().startswith("```"):
+            if fence:
+                break
+            fence = True
+            continue
+        if on and fence:
+            body.append(ln)
+    return "\n".join(body).strip()
+
+
+def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
+                     style: str, keep: str = "") -> str:
+    """首帧 t2i 提示词。
+
+    实测标定（`audit_rules.json` 的 `_style_ratio_about`）：
+    **画风句必须在最前面**（WF-03：位置 > 20 字就报），而且**占比 ≥ 20%**（WF-04，t2i 下限）。
+    画风句是固定 100 字，所以**描述段有硬预算**（约 400 字）—— 这是硬约束，不是风格偏好。
+
+    语言（项目卡拍板记录第 2b 条）：**只有画风锁那一句用中文，其余保持英文。**
+
+    ## 分级预算（2026-09-21 实测教训）
+
+    第一版是"超预算就 break" —— 结果一条超长的场景句把后面**全丢了**，
+    包括 `WF-07` 要核的身份锚英文原文。而且"丢掉"这件事本身**没有任何补偿动作**。
+    现在按优先级分三档：**必需**（画风句／取景／身份锚／无文字）永远留；
+    **重要**（人物装扮、道具）在预算内尽量留；**可压**（场景）最后留 —— 超了从它开始砍。
+    """
+    assets = p1_assets(proj, rules, scene, shot)
+    rel = (scene.get("t") or {}).get("geo") or rules.get("geo_file")
+    geo_cn = geo_cn_block(proj, rel)
+
+    # ── ① 必需：画风句（第 0 字）+ 取景句 ──
+    # ⚠️ 取景句用**完整原文**，不做精简。2026-09-21 模型审出来的：
+    # 我原来用 `framing_en_compact` 只留前半句，结果「手机亮屏在暗处前景／环卫工在远处
+    # 路尽头／闫清骑出画面朝菜市场」这些**构图信息全丢了** ——
+    # 而首帧恰恰就是构图。省字数要从场景段省，不能从取景句省。
+    must = [style]
+    if shot.get("framing_en"):
+        must.append(str(shot["framing_en"]).strip())
+    # ── ② 必需：身份锚（WF-07 逐字核这句英文）+ 正向否定锁（WF-08）──
+    who = []
+    for c in assets["characters"]:
+        bits = []
+        if c.get("name"):
+            bits.append(str(c["name"]))
+        if c.get("costume"):
+            bits.append(str(c["costume"]))
+        if c.get("signature"):
+            bits.append(str(c["signature"]))          # **英文原文，逐字**
+        for lock in (c.get("positive_locks") or []):
+            bits.append(str(lock))
+        if bits:
+            who.append("，".join(bits))
+    # ── ③ 重要：道具 ──
+    props = [f"道具：{pr.get('name','')}" for pr in assets["props"] if pr.get("name")]
+    # ── ④ 可压：场景（只取中文 GEO 的头两条：场地与坐标系）──
+    sc_bits = []
+    if geo_cn:
+        head = [ln.strip("— ").strip() for ln in geo_cn.splitlines()
+                if ln.strip().startswith("—")]
+        sc_bits = head[:2]
+    scene_line = ("场景：" + "；".join(sc_bits) + "。") if sc_bits else ""
+    if keep:
+        must.append(keep)          # 取景复述：也是构图依据，算必需
+    tail = "画面里是干净的无字画面。"
+
+    floor = (rules.get("style_ratio_min") or {}).get("t2i", 0.2)
+    style_n = len(PA.norm_ws(style))
+
+    def nchars(x: str) -> int:
+        return PA.noscript_chars(x)
+
+    def assemble(parts: list[str]) -> str:
+        seen, out = set(), []
+        for p in parts:
+            if p and p not in seen:
+                seen.add(p)
+                out.append(p)
+        return "\n".join(out)
+
+    full = assemble(must + who + props + [scene_line, tail])
+    if style_n / max(1, nchars(full)) >= floor:
+        return full
+
+    # 需要截短：**先砍场景，再砍道具**，必需项一个都不动
+    print(f"   ⚠️ t2i 描述段 {nchars(full)} 字，画风句占比 {style_n / nchars(full):.1%}"
+          f" 低于下限 {floor:.0%} —— 按优先级截短（先砍场景、再砍道具）")
+    for drop in ([scene_line], [scene_line] + props[-1:], [scene_line] + props):
+        cand = assemble(must + who + [p for p in props if p not in drop]
+                        + ([scene_line] if scene_line not in drop else []) + [tail])
+        if style_n / max(1, nchars(cand)) >= floor:
+            return cand
+    # 砍到只剩必需项还是不够 → 这是**内容问题**，报出来别自己硬改
+    out = assemble(must + who + [tail])
+    ratio = style_n / max(1, nchars(out))
+    if ratio < floor:
+        print(f"   ⛔ 砍到只剩必需项仍只有 {ratio:.1%}（画风句 {style_n} 字 / "
+              f"上限 {int(style_n / floor)} 字）—— 取景句太长或身份锚太长，"
+              f"要么精简它们，要么下调 style_ratio_min（**那是内容决定，交用户**）")
+    return out
+
+
+def framing_en_compact(shot: dict) -> str:
+    """取景句的精简版（**已弃用，保留作对照**）。
+
+    2026-09-21：我原来用它给 t2i 省字数，只留"机位与景别"那半句。
+    模型审出来——**丢掉的正是构图信息**（手机屏在暗处前景、环卫工在远处路尽头、
+    闫清骑出画面朝菜市场）。而首帧的唯一职责就是构图。
+    → 现在 t2i 直接用 `framing_en` 完整原文，字数从场景段省。
+    """
+    f = (shot.get("framing_en") or "").strip()
+    if not f:
+        return ""
+    head = f.split(",")[0].strip()
+    return head + "." if head else f
+
+
+def build_h3_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
+                    texts: dict, style: str, geo: str) -> str:
+    """H3 六段式。**段序固定**（WF-01），且画风句与 GEO 块逐字在内。
+
+    | 段 | 谁供 |
+    |---|---|
+    | `subject_definitions` | 程序：资产清单的人物＋签名标记＋`<Picture 1>`；模型补每人在拍内怎么演化 |
+    | `summary`             | 模型（一句话说清这一镜是什么） |
+    | `retention_analysis`  | 模型（逐 Subject 写保留策略，格式由程序保证） |
+    | `detailed_description`| **程序**：画风句 → 取景 → GEO 块 → 动作时间轴（模型供）→ 台词（戏供）→ 禁字幕句 |
+    | `overall_soundscape`  | 模型 |
+    | `non_diegetic_music`  | 模型 |
+    """
+    assets = p1_assets(proj, rules, scene, shot)
+    beats = _beats_of(proj, rules, scene)
+    dlg, vo = _lines_of(beats, shot)
+    sid = shot.get("id", "S??")
+
+    # ── subject_definitions ──
+    subjects = []
+    for i, c in enumerate(assets["characters"], start=1):
+        line = f"<Subject {i}> is {c.get('name','')}"
+        if c.get("costume"):
+            line += f", wearing {c['costume']}"
+        if c.get("signature"):
+            line += f". Identity anchor that must be visible: {c['signature']}"
+        for lock in (c.get("positive_locks") or []):
+            line += f". He is {lock}"
+        ev = (texts.get("subject_evolution") or {}).get(c.get("id"))
+        if ev:
+            line += f". In [Shot 1] {ev}"
+        subjects.append(line + ".")
+    for j, pr in enumerate(assets["props"], start=len(subjects) + 1):
+        ev = (texts.get("subject_evolution") or {}).get(pr.get("id"))
+        subjects.append(f"<Subject {j}> is {pr.get('name','')}"
+                        + (f". In [Shot 1] {ev}" if ev else "") + ".")
+    for sc in assets["scenes"]:
+        ev = (texts.get("subject_evolution") or {}).get(sc.get("id"))
+        if ev:
+            subjects.append(f"<Subject {len(subjects)+1}> is the location "
+                            f"{sc.get('name','')}. In [Shot 1] {ev}.")
+    subjects.append(
+        f"<Picture 1> is the first frame of [Shot 1] and fixes the framing, "
+        f"the camera position and the lighting. The shot scale is already final "
+        f"in <Picture 1> and must not change.")
+
+    # ── detailed_description ──
+    dd = [style, ""]                                  # ① 画风句第 0 字（WF-03）
+    dd.append(f"[Shot 1] {shot.get('framing_en','')}")
+    dd.append("")
+    dd.append(geo)                                    # ② GEO 逐字（WF-05）
+    dd.append("")
+    if texts.get("action_timeline"):
+        dd.append(texts["action_timeline"])
+        dd.append("")
+    # ③ 台词：**逐字来自戏**（WF-09b 会逐句核对）
+    spoke = []
+    for k, ln in enumerate(dlg):
+        who = texts.get("dialogue_speaker") or {}
+        idx = who.get(str(k), who.get(k, 2))
+        spoke.append(f"<Subject {idx}> (S{k+1}) says, <d>[Chinese] {ln}</d>")
+    for k, ln in enumerate(vo):
+        spoke.append(f"Off-screen voice-over (S{len(dlg)+k+1}), "
+                     f"<d>[Chinese] {ln}</d>")
+    if spoke:
+        dd.append(" ".join(spoke))
+    else:
+        # ⚠️ 措辞必须命中 `pipeline_audit.NO_SPEECH_RE`（判据认的是
+        # `no dialogue|nobody speaks|nobody's lips move|no one speaks|no voices|is silent`）。
+        # **VO 是画外音**：现场没人张嘴，所以是"无人说话"，不是"没有声音"。
+        dd.append("Neither man speaks in this shot and nobody's lips move; "
+                  "the only voice is an off-screen voice-over.")
+    dd.append("")
+    dd.append("No subtitles, captions or on-screen text appear at any point.")
+    fields = {
+        "subject_definitions": "\n".join(subjects),
+        "summary": texts.get("summary") or "",
+        "retention_analysis": texts.get("retention_analysis") or "",
+        "detailed_description": "\n".join(dd),
+        "overall_soundscape": texts.get("overall_soundscape") or "",
+        "non_diegetic_music": texts.get("non_diegetic_music") or "",
+    }
+    return "\n\n".join(f"{k}:\n{fields[k]}" for k in PA.H3_FIELDS)
+
+
+def _s6_ask(proj: Path, rules: dict, scene: dict, shot: dict) -> str:
+    """S6 的作业单：**只要剧作文本** —— 工作流图与全部锁定件由程序拼。"""
+    beats = _beats_of(proj, rules, scene)
+    dlg, vo = _lines_of(beats, shot)
+    assets = p1_assets(proj, rules, scene, shot)
+    geo = geo_block_text(proj, rules, scene)
+    style = style_lock_text(rules)
+    sid = shot["id"]
+    names = [c.get("id") for c in assets["characters"]] + \
+            [p.get("id") for p in assets["props"]] + \
+            [s.get("id") for s in assets["scenes"]]
+    return f"""给**一个镜头**写 H3 视频提示词里「属于创作」的那几段。
+
+## 这一镜
+镜号 {sid}｜{shot.get('shot_size','')}｜{shot.get('lens_mm')}mm｜{shot.get('dist_m')}m｜
+{shot.get('frames')} 帧 ＝ {shot.get('duration_s')}s｜认领节拍 {'、'.join(shot.get('beats') or [])}
+
+**取景（原样，别改写，程序会自己写进去）**：{shot.get('framing_en','')}
+**这一镜演什么**：{shot.get('content','')}
+
+## 戏里这一拍写了什么（**唯一权威，不许新增剧情**）
+{chr(10).join(f'- {b}「{beats[b]["header"]}」' for b in (shot.get('beats') or []) if b in beats)}
+
+**这一镜有对白 {len(dlg)} 句、VO {len(vo)} 句。**
+对白原文（**程序会逐字写进 <d>，你只负责指定说话人**）：
+{chr(10).join(f'  [{k}] {x}' for k, x in enumerate(dlg)) or '  （无）'}
+VO 原文（同样由程序写）：
+{chr(10).join(f'  [{k}] {x}' for k, x in enumerate(vo)) or '  （无）'}
+
+## 这一镜用到的资产（id 与 name 都给你，**signature 由程序写**）
+{json.dumps({k: [{'id': a.get('id'), 'name': a.get('name')} for a in v]
+             for k, v in assets.items()}, ensure_ascii=False, indent=2)}
+
+## 程序会把这些**一字不改**写进去，你**不要**重复它们
+- 画风锁定句（{len(style)} 字，放 detailed_description 最前面）
+- GEO 空间地图英文块（{len(geo)} 字，逐字，在取景句之后）
+- 每个角色的签名标记与正向否定锁
+- 戏里的每一句对白／VO 原文（包在 `<d>[Chinese] …</d>` 里）
+- 禁字幕句 `No subtitles, captions or on-screen text appear at any point.`
+- 取景句（`{shot.get('framing_en','')[:40]}…`）
+
+## 输出 JSON（严格照抄字段名，不要多写一个字）
+{{
+  "action_timeline": "**英文**。这一镜的动作按秒分段的连续散文，格式：`0.0-1.5s … 1.5-3.5s …`，覆盖整个 {shot.get('duration_s')} 秒，最后一段必须落到「保持不动」之类不会让画面在结尾还在动的描述。只写看得见的动作，不许写台词。",
+  "dialogue_speaker": {{"0": 说话人的 Subject 序号}},
+  "subject_evolution": {{"CHR-01": "**英文**。这个人在这一镜里怎么动", "SCN-02": "…"}},
+  "summary": "**英文**。两三句说清这一镜是什么、谁在做什么。若有 VO，写成画外音转述，不许写成人物的现场台词。",
+  "retention_analysis": "**英文**。逐 Subject 一段：`<Subject N> (appears in [Shot 1]): fully_preserved — …`。",
+  "overall_soundscape": "**英文**。这一镜的环境音。**不要**写人的说话声（除非戏里有对白）；有 VO 时环境音要给它留位置。",
+  "non_diegetic_music": "**英文**。配乐。戏里说了不许变调／不许加悲鸣的地方要照办；没有配乐就写 `none`。"
+}}
+
+## 硬约束
+- `action_timeline` **必须覆盖整段时长并且结尾收住**（旧线就因为没给时间预算，7.29 秒全花在开头动作上、结尾还在动）。
+- `dialogue_speaker` 的序号要对应上面 assets 里 characters 的顺序（第 1 个 = 1）。
+  **VO 是画外音，不要在 dialogue_speaker 里给它编号** —— 程序会自己写。
+- 戏里没写的东西**一个字都不许加**。特别是：不许给猪加悲鸣、不许配乐变调、不许加旁白。
+- 全部英文。**不要**在英文里夹中文。"""
+
+
+def _gen_s6(proj: Path, rules: dict, scene: dict, rounds: int) -> int:
+    """S6：逐镜问模型要剧作文本 → **程序拼工作流** → 落盘 → 跑 S6 门禁 → 不过打回。
+
+    ⚠️ 与 S2/S4 的 `_gen_once` 不同：这里**模型不产出文件**，它只供文本，
+    文件由 `build_*_workflow` 生成。所以不能复用 `_gen_once`（那是"模型直接吐 JSON 落盘"）。
+    """
+    import llm
+    shots = (scene.get("t") or {}).get("shots") or []
+    if not shots:
+        print("❌ 这一场没有镜头，先跑 S2")
+        return 1
+    seat = int(json.loads(read(proj / "audit_rules.json")).get("seed_base") or 20260921)
+    errs: list = []
+    for i in range(1, rounds + 1):
+        texts_by_shot: dict[str, dict] = {}
+        print(f"\n── 第 {i}/{rounds} 轮：逐镜问模型要剧作文本…")
+        for s in shots:
+            ask = _s6_ask(proj, rules, scene, s)
+            if errs:
+                ask += ("\n\n## ⚠️ 上一轮没过，门禁报出这些错 —— **逐条改掉**\n"
+                        + "\n".join(f"- [{e['code']}] {e['msg'][:300]}" for e in errs[:10]))
+            try:
+                data = llm.chat_json([{"role": "system", "content": SYSTEM_PROMPT},
+                                      {"role": "user", "content": ask}])
+            except Exception as exc:                       # noqa: BLE001
+                msg = str(exc)
+                print(f"   ⛔ {s['id']} 模型调用失败：{msg[:200]}")
+                if any(k in msg for k in ("被截断", "正文是空的", "JSON")) and i < rounds:
+                    errs = [{"code": "GEN-01",
+                             "msg": f"{s['id']} 输出被截断/不是合法 JSON：{msg[:400]}"}]
+                    texts_by_shot = {}
+                    break
+                return 1
+            texts_by_shot[s["id"]] = data
+            print(f"   ✓ {s['id']} 拿到剧作文本")
+        if not texts_by_shot:
+            continue
+
+        # ── 程序拼工作流并落盘 ──
+        style = style_lock_text(rules)
+        geo = geo_block_text(proj, rules, scene)
+        if not style:
+            print("❌ audit_rules.json 没登记画风锁定句 —— 拼不出提示词")
+            return 1
+        canvas = (scene.get("t") or {}).get("canvas") or rules.get("canvas") or [1376, 768]
+        for k, s in enumerate(shots):
+            sid = s["id"]
+            ffw = s.get("first_frame_workflow")
+            wf = s.get("workflow")
+            if not ffw or not wf:
+                print(f"❌ {sid} 没登记 first_frame_workflow / workflow —— 先跑 S2")
+                return 1
+            texts = texts_by_shot.get(sid) or {}
+            keep = ("**本镜取景必须在首帧里就做出来**："
+                    f"{s.get('shot_size','')}，{s.get('lens_mm')}mm，距 {s.get('dist_m')}m。")
+            t2i = build_t2i_prompt(proj, rules, scene, s, style, keep)
+            (proj / "workflows" / f"{ffw}.json").write_text(
+                json.dumps(build_t2i_workflow(
+                    t2i, f"{rules.get('slug','proj')}/{ffw}",
+                    seat + k, note=_t2i_note(scene, s, ffw),
+                    canvas=canvas),
+                    ensure_ascii=False, indent=2), encoding="utf-8")
+            h3p = build_h3_prompt(proj, rules, scene, s, texts, style, geo)
+            (proj / "workflows" / f"{wf}.json").write_text(
+                json.dumps(build_h3_workflow(
+                    # ⚠️ LoadImage 用**镜头表登记的那个文件名**（不带 `meishi/` 子目录）——
+                    # 那是 `run.py` 落盘后的名字，也是审计比对的那个。
+                    h3p, s.get("first_frame"),
+                    f"{rules.get('slug','proj')}/{wf}", seat + 100 + k,
+                    int(s.get("frames") or 175), canvas=canvas,
+                    note=_h3_note(scene, s, wf)),
+                    ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"   ✍️  写了 workflows/{ffw}.json 与 workflows/{wf}.json")
+        _resync_prompts(proj)
+
+        rep = GATES["S6"](proj, rules, pick_scene(proj, rules, scene["id"]), {})
+        if rep.ok():
+            print(f"\n🎬 S6 过了（第 {i} 轮）")
+            return 0
+        errs = rep.errors
+        print(f"   ⛔ 门禁 S6 报 {len(errs)} 条，打回重做：")
+        for e in errs[:8]:
+            print(f"      ❌ [{e['code']}] {e['msg'][:160]}")
+    fail_file = proj / "review" / "S6_生成失败.json"
+    fail_file.parent.mkdir(parents=True, exist_ok=True)
+    fail_file.write_text(json.dumps({
+        "stage": "S6", "scene": scene["id"], "rounds": rounds, "last_errors": errs,
+        "_note": "跑满轮数仍未过门禁。**别当它成功**；看 last_errors。"},
+        ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n⛔ S6 跑满 {rounds} 轮仍未过门禁，已记 {fail_file.name}")
+    return 1
+
+
+def _resync_prompts(proj: Path) -> None:
+    """把刚写好的工作流里的正向提示词抽到 `prompts/<镜号>.prompt.md`。
+
+    `prompts/` 是规矩 §1 的一层，也是**提示词能被 diff 的地方**。
+    失败了不影响生成，只提醒。
+    """
+    try:
+        PA.cmd_sync_prompts(proj, PA.load_rules(proj))
+    except Exception as exc:                            # noqa: BLE001
+        print(f"   ⚠️ 同步 prompts/ 失败（不影响工作流）：{exc}")
+
+
+def _t2i_note(scene: dict, shot: dict, ffw: str) -> str:
+    return (f"# {scene['id']} {shot['id']} · 首帧（t2i）\n\n"
+            f"**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n"
+            f"| 项 | 值 |\n|---|---|\n"
+            f"| 画布 | 1376×768 |\n| 步骤 | 8 步 / CFG 1.0 |\n"
+            f"| 景别 | {shot.get('shot_size','')} |\n| 镜头 | {shot.get('lens_mm')}mm |\n"
+            f"| 距离 | {shot.get('dist_m')}m |\n| 可见宽 | {shot.get('visible_w_m')}m |\n\n"
+            f"出图落 `outputs/{shot.get('first_frame')}`（`SaveImage` 前缀 `meishi/{ffw}`）。\n\n"
+            f"**首帧就是构图**：H3 把 `<Picture 1>` 当起点状态、景别基本被沿用，"
+            f"所以景别与机位只能在这里定死。")
+
+
+def _h3_note(scene: dict, shot: dict, wf: str) -> str:
+    return (f"# {scene['id']} {shot['id']} · H3 Ref2VA（六段式）\n\n"
+            f"**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n"
+            f"| 项 | 值 |\n|---|---|\n"
+            f"| 后端 | MiniMax H3 **Ref2VA**（一次前向同时出画面＋声音） |\n"
+            f"| 画布 | 1376×768 |\n"
+            f"| 帧数 | **{shot.get('frames')}** ＝ 17k+5 ✅ |\n"
+            f"| 时长 | {shot.get('duration_s')}s @ 24fps |\n"
+            f"| 采样 | **4 步** / simple / res_multistep / denoise 1.0 |\n"
+            f"| LoRA | `{H3_MODELS['lora']}`（**4 步档**）|\n"
+            f"| 参考图 | 只有 `ref_image_0` ＝ `<Picture 1>`，来自 `{shot.get('first_frame')}` |\n\n"
+            f"**六段式段序固定**：subject_definitions → summary → retention_analysis →\n"
+            f"detailed_description → overall_soundscape → non_diegetic_music。\n\n"
+            f"**画风句在 detailed_description 第 0 字，GEO 英文块逐字在内** —— "
+            f"这两条由程序拼进去，改提示词前先看 `pipeline/docs/06_审计闸门.md`。")
+
+
 def cmd_gen(proj: Path, stage_id: str, scene_id: str | None, rounds: int) -> int:
     rules = PA.load_rules(proj)
     scene = pick_scene(proj, rules, scene_id)
 
     if stage_id == "S7":
         return _gen_verdicts(proj, rules, scene, rounds)
+
+    # S6 走独立路径：**模型只供剧作文本，工作流图由程序拼**（见 build_*_workflow）
+    if stage_id == "S6":
+        print(f"▶ 自动生成 · S6 写提示词（含首帧工作流）"
+              f"（最多 {rounds} 轮，不过就把门禁的错打回给模型重做）")
+        return _gen_s6(proj, rules, scene, rounds)
 
     spec = _gen_spec(stage_id, proj, rules, scene)
     print(f"▶ 自动生成 · {stage_id} {spec['name']}"
