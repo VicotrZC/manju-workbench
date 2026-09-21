@@ -317,16 +317,35 @@ def find_scenes(proj: Path, rules: dict) -> list[dict]:
 
 
 def pick_scene(proj: Path, rules: dict, scene_id: str | None):
+    """选场次。**多份候选时不许静默挑一个** —— 必须由 audit_rules 指明，否则报错。
+
+    2026-09-21 实测踩到：文件名是 `SCN01_镜头表.json`，而文件里的 `scene` 字段是 `SCN-01`。
+    `gen` 按字段名去写文件，于是多出一份 `SCN-01_镜头表.json`；
+    `sorted()` 把 `-`(0x2D) 排在 `0`(0x30) 前面，**程序就静默读了坏的那一份**。
+    用户要的「程序兜底」，第一条就是：**歧义必须报错，不许替人挑。**
+    """
     scenes = find_scenes(proj, rules)
     if not scenes:
         raise SystemExit(f"❌ {proj.name} 下没有 storyboard/*_镜头表.json —— 一个场次都没有，"
                          f"先走 S1/S2")
-    if scene_id is None:
+    if scene_id:
+        key = scene_id.replace("-", "").lower()
+        for s in scenes:
+            if s["id"] == scene_id or s["file"] == scene_id or \
+               Path(s["file"]).stem.replace("-", "").lower().startswith(key):
+                return s
+        raise SystemExit(f"❌ 没有这个场次：{scene_id}\n现有：{[s['id'] for s in scenes]}")
+    if len(scenes) == 1:
         return scenes[0]
+    declared = (rules.get("shot_table") or "").replace("\\", "/")
     for s in scenes:
-        if s["id"] == scene_id or s["file"] == scene_id:
+        if s["file"].replace("\\", "/") == declared:
             return s
-    raise SystemExit(f"❌ 没有这个场次：{scene_id}\n现有：{[s['id'] for s in scenes]}")
+    raise SystemExit(
+        f"❌ 找到 {len(scenes)} 份镜头表，且 audit_rules.json 的 `shot_table` 没指明用哪一份：\n"
+        + "\n".join(f"   - {s['file']}（{s['shots']} 镜）" for s in scenes)
+        + "\n→ 要么删掉多余的那份，要么在 audit_rules.json 里把 `shot_table` 写清。"
+          "\n  **程序不替你挑** —— 挑错了整场都白做。")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1122,16 +1141,290 @@ def cmd_scaffold(proj: Path, scene_id: str | None, write: bool) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  S7 的批量动作：逐镜出审计包 / 逐镜封存
+# ══════════════════════════════════════════════════════════════════════
+def cmd_audit_all(proj: Path, scene_id: str | None) -> int:
+    """给每一镜出审计包（preflight）。**这只是备料，判定由模型写。**"""
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+    n = 0
+    for s in (scene.get("t") or {}).get("shots") or []:
+        wf = s.get("workflow")
+        if not wf or not (proj / "workflows" / f"{wf}.json").exists():
+            print(f"⚠️  {s.get('id')} 跳过（工作流不存在：{wf}）")
+            continue
+        print(f"── {s['id']}  {wf}")
+        PA.cmd_preflight(proj, wf, rules, as_json=False)
+        n += 1
+    print(f"\n📦 出了 {n} 份审计包（.work/audit/packets/）")
+    print("   下一步：模型读审计包写判定 → review/audits/<工作流>.verdict.json")
+    return 0
+
+
+def cmd_seal_all(proj: Path, scene_id: str | None) -> int:
+    """把 `review/audits/<工作流>.verdict.json` 逐个封存。缺判定的报出来。"""
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+    ok = miss = 0
+    for s in (scene.get("t") or {}).get("shots") or []:
+        wf = s.get("workflow")
+        if not wf:
+            continue
+        vf = proj / "review" / "audits" / f"{wf}.verdict.json"
+        if not vf.exists():
+            print(f"⚠️  {s['id']}  {wf} —— 没有判定文件 {vf.name}，跳过")
+            miss += 1
+            continue
+        print(f"── {s['id']}  {wf}")
+        try:
+            if PA.cmd_seal(proj, wf, str(vf), rules) == 0:
+                ok += 1
+        except SystemExit as exc:
+            print(f"   ⛔ {exc}")
+            miss += 1
+    print(f"\n🔒 封存 {ok} 条，缺/失败 {miss} 条")
+    return 0 if miss == 0 else 1
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  自动生成循环：**组请求 → 调模型 → 落盘 → 跑门禁 → 不过就打回重做**
+# ══════════════════════════════════════════════════════════════════════
+SYSTEM_PROMPT = """你是漫剧制作管线里的**生成模块**，不是聊天助手。
+
+铁律：
+1. **只输出 JSON**，不要解释、不要寒暄、不要 Markdown 代码块以外的文字。
+2. **不许编造**。所有内容必须来自给你的上游文本；上游没写的，不要自己加。
+3. 上游写了的东西**不许丢** —— 丢了会被程序的门禁抓出来打回，白跑一轮。
+4. 严格按给的 schema 输出，字段名一个字母都不能改。
+"""
+
+
+def _read_if(proj: Path, rel: str | None) -> str:
+    if not rel:
+        return ""
+    p = proj / rel
+    return read(p) if p.exists() else ""
+
+
+def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
+    """每个可生成阶段的「要什么、写到哪、写完用什么门禁验」。"""
+    sid = scene["id"]
+    t = scene.get("t") or {}
+
+    if stage_id == "S2":
+        # ⚠️ 写出路径**必须用 audit_rules.json 登记的那一个**，不许按 scene['id'] 拼 ——
+        # 文件名 `SCN01_…` 与字段 `scene:"SCN-01"` 不一致，拼出来的会是另一个文件，
+        # 于是项目里多出一份镜头表，程序静默读了坏的那份（2026-09-21 实测）。
+        out = rules.get("shot_table") or f"storyboard/{sid}_镜头表.json"
+        return {
+            "name": "分镜（机器可读镜头表）",
+            "out": out,
+            "gate": "S3",
+            "ask": f"""把这一场的戏改成**机器可读镜头表**。
+
+## 上游：戏（节拍是唯一权威，分镜只能认领，不能新增）
+{_read_if(proj, rules.get('script'))}
+
+## 上游：GEO 空间地图（站位/机位/光源）
+{_read_if(proj, rules.get('geo_file'))}
+
+## 现有的镜头表（如果有，在它基础上改，别推倒重来）
+{json.dumps(t, ensure_ascii=False, indent=2) if t else "（还没有）"}
+
+## 输出 schema（严格照抄字段名）
+{{
+  "scene": "{sid}", "scene_name": "...", "episode": "...",
+  "canvas": [1376, 768], "fps": 24,
+  "script": "{rules.get('script')}", "geo": "{rules.get('geo_file')}",
+  "shots": [
+    {{"id": "S01", "beats": ["B2"],
+      "shot_size": "中景", "framing_en": "A static medium shot, camera at eye level ...",
+      "camera": "CAM1", "lens_mm": 35, "dist_m": 3.5, "visible_w_m": 3.6,
+      "frames": 175, "duration_s": 7.29,
+      "first_frame": "首帧文件名.png",
+      "first_frame_workflow": "出首帧的工作流名",
+      "workflow": "这一镜的 H3 工作流名（一镜一个，不许共用）",
+      "content": "这一镜演什么"}}
+  ]
+}}
+
+## 硬约束
+- **戏里每一个节拍 B? 都必须被至少一个镜头认领**；漏一拍就整段消失。
+- 镜头不许认领戏里没有的节拍。
+- frames 必须落在 **17k+5** 网格（5/22/39/56/73/90/107/124/141/158/175/192/209/226…）。
+- 一镜一条工作流，**不许两镜共用同一个 workflow 名**。
+- 每镜必须有独立的 first_frame。
+- beats 里的编号必须真实存在于上面的戏里。""",
+        }
+
+    if stage_id == "S4":
+        old = _read_if(proj, f"storyboard/{sid}_资产清单.json")
+        return {
+            "name": "抽离角色／道具／场景",
+            "out": f"storyboard/{sid}_资产清单.json",
+            "gate": "S5",
+            "ask": f"""从这一场的戏与镜头表里**抽出需要跨镜一致的角色／道具／场景**。
+
+## 上游：戏
+{_read_if(proj, rules.get('script'))}
+
+## 上游：镜头表
+{json.dumps(t, ensure_ascii=False, indent=2)}
+
+## 上游：项目已登记的角色锁定件（**签名标记必须原样带过来**）
+{json.dumps(rules.get('characters') or {}, ensure_ascii=False, indent=2)}
+
+## 现有清单（如果有，在它基础上改）
+{old or "（还没有）"}
+
+## 输出 schema
+{{
+  "scene": "{sid}",
+  "characters": [{{"id":"CHR-01","name":"...","files":["资产图相对路径"],
+                   "signature":"签名标记原文","used_in":["S01","S02"],
+                   "costume":"本场造型（围裙/湿手/伤口之类）"}}],
+  "props":      [{{"id":"PROP-01","name":"...","files":[],"used_in":["S03"],
+                   "why":"为什么它必须跨镜一致"}}],
+  "scenes":     [{{"id":"{sid}","name":"...","files":[],"used_in":["S01"]}}]
+}}
+
+## 硬约束
+- 三段（characters / props / scenes）**都必须有**，空的写 []。
+- 每项必须有 id；characters 必须有 signature。
+- **不许留 TODO**。
+- 每一项的 id 必须能在镜头表里被引用到（`used_in` 里写清哪几镜用它）。""",
+        }
+
+    if stage_id == "S7":
+        return {
+            "name": "审查提示词（出判定）",
+            "out": None,             # 每镜一个判定文件
+            "gate": "S7",
+            "ask": None,             # 每镜单独组
+        }
+
+    raise SystemExit(f"❌ {stage_id} 还没有生成规格（目前支持 S2 / S4 / S7）")
+
+
+def _gen_once(proj: Path, stage_id: str, rules: dict, scene: dict,
+              ask: str, out_rel: str, gate_id: str, prior_errors: list,
+              attempt: int, total: int) -> tuple[bool, str]:
+    """跑一轮：组消息 → 调模型 → 落盘 → 跑门禁。返回 (过没过, 说明)。"""
+    import llm
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    body = ask
+    if prior_errors:
+        body += ("\n\n## ⚠️ 上一轮没过，门禁报出这些错 —— **逐条改掉，不要重蹈**\n"
+                 + "\n".join(f"- [{e['code']}] {e['msg']}" for e in prior_errors))
+    msgs.append({"role": "user", "content": body})
+
+    print(f"\n── 第 {attempt}/{total} 轮：请求模型…")
+    try:
+        data = llm.chat_json(msgs)
+    except Exception as exc:                       # noqa: BLE001
+        return False, f"模型调用失败：{exc}"
+
+    p = proj / out_rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"   落盘 {out_rel}（{p.stat().st_size} B）")
+
+    rep = GATES[gate_id](proj, rules, pick_scene(proj, rules, scene["id"]), {})
+    if rep.ok():
+        print(f"   ✅ 门禁 {gate_id} 通过")
+        return True, "ok"
+    errs = rep.errors
+    print(f"   ⛔ 门禁 {gate_id} 报 {len(errs)} 条，打回重做：")
+    for e in errs[:8]:
+        print(f"      ❌ [{e['code']}] {e['msg']}")
+    return False, errs
+
+
+def cmd_gen(proj: Path, stage_id: str, scene_id: str | None, rounds: int) -> int:
+    rules = PA.load_rules(proj)
+    scene = pick_scene(proj, rules, scene_id)
+
+    if stage_id == "S7":
+        return _gen_verdicts(proj, rules, scene, rounds)
+
+    spec = _gen_spec(stage_id, proj, rules, scene)
+    print(f"▶ 自动生成 · {stage_id} {spec['name']}"
+          f"（最多 {rounds} 轮，不过就把门禁的错打回给模型重做）")
+    errs: list = []
+    for i in range(1, rounds + 1):
+        ok, res = _gen_once(proj, stage_id, rules, scene, spec["ask"],
+                            spec["out"], spec["gate"], errs, i, rounds)
+        if ok:
+            print(f"\n🎬 {stage_id} 过了（第 {i} 轮）")
+            return 0
+        if isinstance(res, str):
+            print(f"\n⛔ {stage_id} 失败：{res}")
+            return 1
+        errs = res
+
+    # 记下"跑了 N 轮没过"这件事本身
+    fail_file = proj / "review" / f"{stage_id}_生成失败.json"
+    fail_file.parent.mkdir(parents=True, exist_ok=True)
+    fail_file.write_text(json.dumps({
+        "stage": stage_id, "scene": scene["id"], "rounds": rounds,
+        "last_errors": errs,
+        "_note": "跑满轮数仍未过门禁。**别当它成功**；看 last_errors。",
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n⛔ {stage_id} 跑满 {rounds} 轮仍未过门禁，已记 {fail_file.name}")
+    return 1
+
+
+def _gen_verdicts(proj: Path, rules: dict, scene: dict, rounds: int) -> int:
+    """S7：逐镜让模型读审计包写判定。**判定由程序封存，模型碰不到封条。**"""
+    import llm
+    done = 0
+    for s in (scene.get("t") or {}).get("shots") or []:
+        wf = s.get("workflow")
+        pf = ROOT / ".work" / "audit" / "packets" / f"{proj.name}.{wf}.packet.json"
+        if not pf.exists():
+            print(f"⚠️  {s['id']} 没有审计包，先跑 audit-all")
+            continue
+        ask = (f"下面是镜头 {s['id']} 的审计包。**逐拍核对：戏里写的每一样东西，"
+               f"到底进没进这条提示词。**\n\n"
+               f"输出判定 JSON（严格照 schema）：\n"
+               f'{{"subject":"{wf}","auditor":"model","verdict":"pass 或 fail",'
+               f'"summary":"两三句","findings":[{{"id":"F1","level":"error|warn|info",'
+               f'"code":"对应机械码或 null","claim":"...","evidence":"...","fix":"..."}}],'
+               f'"blocking":["F1"],"waivers":[]}}\n\n'
+               f"判据：机械 ERROR **逐条复核**。是真问题就写进 findings；"
+               f"确实是误报才写进 waivers 并给 reason。**不许为了让流程过而判 pass。**\n\n"
+               f"## 审计包\n{pf.read_text(encoding='utf-8-sig')}")
+        vf = proj / "review" / "audits" / f"{wf}.verdict.json"
+        vf.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n── {s['id']}  {wf}")
+        try:
+            v = llm.chat_json([{"role": "system", "content": SYSTEM_PROMPT},
+                               {"role": "user", "content": ask}])
+        except Exception as exc:                   # noqa: BLE001
+            print(f"   ⛔ 模型调用失败：{exc}")
+            return 1
+        v.setdefault("subject", wf)
+        vf.write_text(json.dumps(v, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"   判定 {v.get('verdict')} → {vf.name}（findings "
+              f"{len(v.get('findings') or [])}）")
+        done += 1
+    print(f"\n写了 {done} 份判定。**下一步由程序封存**："
+          f"pipeline.py seal-all {proj.name} --scene {scene['id']}")
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════
 def main() -> int:
     ap = argparse.ArgumentParser(description="漫剧制作管线（阶段状态机 + 程序兜底）")
     ap.add_argument("cmd", choices=["stages", "scenes", "status", "gate", "verify",
                                     "brief", "seal", "ui", "json", "qc", "run",
-                                    "scaffold", "probe"])
+                                    "scaffold", "probe", "audit-all", "seal-all", "gen"])
     ap.add_argument("project")
-    ap.add_argument("target", nargs="?", help="阶段 id / 文件（gate/brief/seal/probe 用）")
+    ap.add_argument("target", nargs="?", help="阶段 id / 文件（gate/brief/seal/gen 用）")
     ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON")
     ap.add_argument("--scene", default=None)
     ap.add_argument("--shot", default=None, help="run 用：只跑某一镜")
+    ap.add_argument("--rounds", type=int, default=3, help="gen 用：最多打回重做几轮")
     ap.add_argument("--port", type=int, default=8788)
     ap.add_argument("--write", action="store_true", help="qc/scaffold 落盘")
     ap.add_argument("--dry", action="store_true", help="run 用：只列不跑")
@@ -1157,6 +1450,17 @@ def main() -> int:
 
     if a.cmd == "scaffold":
         return cmd_scaffold(proj, a.scene, a.write)
+
+    if a.cmd == "audit-all":
+        return cmd_audit_all(proj, a.scene)
+
+    if a.cmd == "seal-all":
+        return cmd_seal_all(proj, a.scene)
+
+    if a.cmd == "gen":
+        if not a.target:
+            ap.error("gen 需要阶段 id（S2 / S4 / S7）")
+        return cmd_gen(proj, a.target, a.scene, a.rounds)
 
     if a.cmd == "stages":
         print(f"{'阶段':<6}{'名称':<24}{'执行者':<8}封条  说明")

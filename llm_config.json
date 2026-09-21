@@ -1,0 +1,25 @@
+{
+  "_about": [
+    "**模型通道配置。本文件进 git，里面没有密钥。**",
+    "密钥放仓库根的 llm_key.txt（.gitignore 已挡），或环境变量 LLM_API_KEY。",
+    "判据与用法见 tools/llm.py 顶部与 pipeline/docs/07_管线.md §五。",
+    "",
+    "base_url 是 **OpenCode Zen**（OpenAI 兼容网关），地址经核实。",
+    "model 的 id 是**从端点自己拉出来的**（`python tools/llm.py models`，74 个），",
+    "不是猜的：列表里确实有 deepseek-v4.1-flash。"
+  ],
+
+  "base_url": "https://opencode.ai/zen/v1",
+  "model": "deepseek-v4.1-flash",
+
+  "_backend_about": [
+    "api  = 直接 HTTP POST 到模型（生产）",
+    "file = 把请求写进 .work/llm_queue/，等外部填答（**没密钥时测整条管线用**）",
+    "       填答：python tools/llm.py fulfill <请求id> <答复文件>"
+  ],
+  "backend": "file",
+
+  "temperature": 0.3,
+  "max_tokens": 8000,
+  "timeout_s": 600
+}

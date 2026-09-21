@@ -101,3 +101,6 @@ desktop.ini
 *~
 *.orig
 *.rej
+
+# 模型 API 密钥（同 ssh_pass.txt 的规矩：永不提交、永不打印）
+llm_key.txt

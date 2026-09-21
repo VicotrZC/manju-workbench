@@ -1,1 +1,1 @@
-connect.westb.seetacloud.com 18679
+connect.westc.seetacloud.com 12551
