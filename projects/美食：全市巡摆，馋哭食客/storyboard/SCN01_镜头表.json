@@ -11,27 +11,9 @@
   "geo": "storyboard/SCN01_GEO空间地图.md",
   "shots": [
     {
-      "id": "S00",
-      "beats": [
-        "B1"
-      ],
-      "shot_size": "全景",
-      "framing_en": "A static wide shot at eye level on the pre-dawn street, a lit phone screen showing 04:00 in the dark foreground, one street sweeper far down the empty road, Yan Qing riding his small e-bike out of frame toward the market.",
-      "camera": "CAM0",
-      "lens_mm": 24,
-      "dist_m": 4.0,
-      "visible_w_m": 6.0,
-      "frames": 175,
-      "duration_s": 7.29,
-      "first_frame": "FF_EP02SC01_S00_00001_.png",
-      "first_frame_workflow": "FF_EP02SC01_S00",
-      "workflow": "EP02SC01_S00_h3",
-      "content": "四点空街：手机屏幕在黑暗里亮起04:00，闫清从被窝坐起、骑小电驴出门，整条街只有环卫工人和扫帚声 —— 零对白，两句VO，不出台词。"
-    },
-    {
       "id": "S01",
       "beats": [
-        "B2"
+        "B1"
       ],
       "shot_size": "中景",
       "framing_en": "A static medium shot at eye level from the market aisle, both men across the white-tiled counter, Yan Qing on frame left facing north, the butcher on frame right facing south, the stall's five red pendant lamps the only light.",
@@ -49,7 +31,7 @@
     {
       "id": "S02",
       "beats": [
-        "B3"
+        "B2"
       ],
       "shot_size": "近景",
       "framing_en": "A static medium-close shot at eye level from the market aisle, tighter on the counter surface and the meat between the two men, Yan Qing on frame left, the butcher on frame right raising his chin at the meat.",
@@ -67,7 +49,7 @@
     {
       "id": "S03",
       "beats": [
-        "B4"
+        "B3"
       ],
       "shot_size": "大特写",
       "framing_en": "A static extreme close shot at eye level, the butcher's phone screen pushed right up into frame, a truckload of live pigs driving through the slaughterhouse gate on that screen, Yan Qing's face frozen then slowly grinning at the edge of frame.",
@@ -85,7 +67,7 @@
     {
       "id": "S04",
       "beats": [
-        "B5"
+        "B4"
       ],
       "shot_size": "中景",
       "framing_en": "A static medium shot at eye level from the market aisle, the butcher wrapping the meat on frame right while Yan Qing loads up his e-bike on frame left, dawn light paling at the market mouth behind him.",

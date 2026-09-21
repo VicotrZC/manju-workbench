@@ -141,15 +141,25 @@ class Report:
     def dump(self) -> dict:
         return {"title": self.title, "ok": self.ok(),
                 "errors": self.errors, "warns": self.warns,
+                "pending": self.pendings,
                 "items": self.items}
 
     def print(self):
+        """打印。
+
+        ⚠️ **PENDING 必须和 WARN 分开显示。** 2026-09-21 实测：原来一律打 `⚠️`，
+        于是「首帧还没出」这 9 条形产物项看起来像 9 个**警告**，
+        而标题里的 `WARN 0` 又对不上 —— **数字和符号互相矛盾，读的人只会懵。**
+        """
         mark = "✅" if self.ok() else "⛔"
-        print(f"\n{mark} {self.title} —— ERROR {len(self.errors)} ／ WARN {len(self.warns)}")
+        tail = f"ERROR {len(self.errors)} ／ WARN {len(self.warns)}"
+        if self.pendings:
+            tail += f" ／ 待产出 {len(self.pendings)}"
+        print(f"\n{mark} {self.title} —— {tail}")
         for i in self.items:
             if i["level"] == "INFO":
                 continue
-            tag = "❌" if i["level"] == "ERROR" else "⚠️ "
+            tag = {"ERROR": "❌", "WARN": "⚠️ ", "PENDING": "⏳"}[i["level"]]
             print(f"  {tag} [{i['code']}] {i['msg']}")
             for k, v in i.items():
                 if k not in ("level", "code", "msg"):
@@ -296,18 +306,55 @@ def on_screen(prompt: str, c: dict) -> bool:
     return any(k and str(k).lower() in low for k in keys)
 
 
+def all_shot_tables(proj: Path, rules: dict) -> list[str]:
+    """本项目**所有**场次的镜头表（相对路径，已排序）。
+
+    2026-09-21 拆场次后新增：一个项目可以有多个场次，
+    项目级的 `shot_table` 单值**只够单场次项目用**。
+    下面这些命令拿不到"当前场次"的上下文，就靠这个函数逐场次跑：
+    `check` / `postflight` / `sync-prompts` / `seal` / `verify`。
+    """
+    declared = str(rules.get("shot_table") or "").replace("\\", "/")
+    found = sorted(str(p.relative_to(proj)).replace("\\", "/")
+                   for p in (proj / "storyboard").glob("*_镜头表.json"))
+    if not found:
+        return [declared] if declared else []
+    # 把登记过的那份排在最前（单场次项目的默认命中）
+    return sorted(found, key=lambda r: (r != declared, r))
+
+
+def table_for_workflow(proj: Path, rules: dict, wf_name: str) -> str | None:
+    """这条工作流属于哪一场（返回那一场的镜头表路径）。找不到返回 None。"""
+    if not wf_name:
+        return None
+    for rel in all_shot_tables(proj, rules):
+        f = proj / rel
+        if not f.exists():
+            continue
+        try:
+            tbl = json.loads(read(f))
+        except ValueError:
+            continue
+        for s in tbl.get("shots") or []:
+            if wf_name in (s.get("workflow"), s.get("first_frame_workflow")):
+                return rel
+    return None
+
+
 def load_shot_table(proj: Path, rules: dict,
-                    materials: str = "error") -> tuple[dict, Report]:
+                    materials: str = "error",
+                    table_rel: str | None = None) -> tuple[dict, Report]:
     """读镜头表并核它登记的产物在不在。
 
     `materials`：见 `check_chain` —— `"pending"` 时「产物还没出」记 PENDING 不记 ERROR。
+    `table_rel`：读哪一份镜头表。不给就用项目级 `shot_table`（单场次项目的行为）。
     """
     rep = Report("分镜表（镜头表 JSON）")
 
     def _missing(code: str, msg: str, **extra):
         (rep.pending if materials == "pending" else rep.error)(code, msg, **extra)
 
-    rel = rules.get("shot_table", "storyboard/镜头表.json")
+    rel = table_rel or rules.get("shot_table", "storyboard/镜头表.json")
     f = proj / rel
     if not f.exists():
         rep.error("SHOT-00", f"分镜表不存在：{rel}",
@@ -459,7 +506,42 @@ def h3_nodes(wf: dict) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════════
 #  第一道：层链 + 节拍覆盖
 # ══════════════════════════════════════════════════════════════════════
-def check_chain(proj: Path, rules: dict, materials: str = "error") -> tuple[Report, dict]:
+def tbl_scene_id(tbl: dict) -> str:
+    """镜头表里声明的场次号。**读文件里写的那个**，不按文件名猜。"""
+    return str(tbl.get("scene") or "").strip()
+
+
+def scene_plan(rules: dict, scene_id: str) -> dict:
+    """本场次用哪份戏、负责哪几拍。
+
+    `audit_rules.json` 的 `beat_scope`：
+
+        "beat_scope": {
+          "SCN-01": {"script": "script/EP02_SC01_…_戏.md", "beats": ["B1","B2","B3","B4"]},
+          "SCN-02": {"script": "script/EP02_SC02_凌晨空街_戏.md", "beats": ["B1"]}
+        }
+
+    **为什么一场一份戏**：拆场次之后两场的节拍号各自从 B1 起（各场自己的戏文件是
+    节拍的唯一权威）。所以"戏里有哪些拍"必须**按场次去读它自己那份戏**，
+    不能拿项目级的那一份去套两场 —— 否则 SCN-02 的 B1 会被判成"戏里不存在的节拍"。
+
+    没登记就返回 `{}` = 不限制（单场次项目的旧行为，向后兼容）。
+    """
+    entry = (rules.get("beat_scope") or {}).get(scene_id)
+    if isinstance(entry, dict):
+        return entry
+    if isinstance(entry, (list, tuple)):     # 老写法：只给拍号，戏用项目级那份
+        return {"script": rules.get("script"), "beats": list(entry)}
+    return {}
+
+
+def beat_scope(rules: dict, scene_id: str) -> set[str]:
+    """本场次负责的节拍集合（空集 = 不限制）。"""
+    return {str(b).strip() for b in (scene_plan(rules, scene_id).get("beats") or [])}
+
+
+def check_chain(proj: Path, rules: dict, materials: str = "error",
+                table_rel: str | None = None) -> tuple[Report, dict]:
     """层链与节拍覆盖。
 
     `materials`：**引用了一个还没产出的产物，算什么？**
@@ -487,13 +569,46 @@ def check_chain(proj: Path, rules: dict, materials: str = "error") -> tuple[Repo
         """产物不在：按 materials 决定报 PENDING 还是 ERROR。"""
         (rep.pending if materials == "pending" else rep.error)(code, msg, **extra)
 
-    rel_script = rules.get("script")
+    # ── 本场次用哪份戏 ──
+    # 拆场次后**一场一份戏**（各场节拍号各自从 B1 起）。所以先读镜头表拿到场次号，
+    # 再按 `beat_scope` 找这一场该读哪份戏；没登记才回落到项目级那份。
+    tbl, srep = load_shot_table(proj, rules, materials=materials, table_rel=table_rel)
+    rep.items.extend(srep.items)
+    shots = tbl.get("shots") or []
+    sid_now = tbl_scene_id(tbl)
+    plan = scene_plan(rules, sid_now)
+
+    rel_script = plan.get("script") or rules.get("script")
     if not rel_script or not (proj / rel_script).exists():
-        rep.error("CHAIN-01", f"剧本层文件缺失：{rel_script}", fix="先出戏，再出分镜")
+        rep.error("CHAIN-01",
+                  f"剧本层文件缺失：{rel_script}"
+                  + (f"（场次 {sid_now} 在 beat_scope 里登记的戏）" if plan.get("script") else ""),
+                  fix="先出戏，再出分镜")
         return rep, {}
 
     beats = parse_script(proj / rel_script)
-    rep.info("BEAT-00", f"戏里共 {len(beats)} 个节拍：{'、'.join(beats)}")
+    rep.info("BEAT-00", f"场次 {sid_now} 读的戏：{rel_script}"
+                        f"　共 {len(beats)} 个节拍：{'、'.join(beats)}")
+
+    # ── 本场次**该管哪几拍** ──
+    # 2026-09-21 拆出「凌晨空街」场次后新增。一个项目可以有多个场次（不同地点＝不同场次，
+    # 行规如此），每份镜头表只认领**本场那几拍**；要求每一份都覆盖全部节拍是错的。
+    # 但**跨场次的覆盖不能松**：漏掉的拍必须仍被抓住，否则正是我们要防的那种事故。
+    scope_ids = beat_scope(rules, sid_now)
+    scene_beats = {b: v for b, v in beats.items() if not scope_ids or b in scope_ids}
+    if scope_ids:
+        unknown = sorted(scope_ids - set(beats))
+        if unknown:
+            rep.error("BEAT-03",
+                      f"`beat_scope` 给场次 {sid_now} 登记的节拍，在它自己那份戏里不存在：{unknown}",
+                      fix="节拍号写错了；`beat_scope` 只能引用**该场戏里**真实存在的 B 号")
+        rep.info("BEAT-03", f"本场次（{sid_now}）负责的节拍："
+                            f"{'、'.join(sorted(scene_beats)) or '（空）'}")
+    else:
+        rep.warn("BEAT-03",
+                 f"`beat_scope` 没登记场次 {sid_now} —— 本场按『要覆盖戏里全部 "
+                 f"{len(beats)} 拍』判。**多场次项目必须登记**，否则每一场都会被误报漏拍",
+                 fix="在 audit_rules.json 的 beat_scope 里给每个场次写清 script 与 beats")
 
     # ── WF-19 画风锁的出处（**项目级，只报一次**）──
     # 子 agent 2026-09-21：`audit_rules.json` 里那条 H3 英文锁是程序自己加的，项目卡里没有。
@@ -508,22 +623,41 @@ def check_chain(proj: Path, rules: dict, materials: str = "error") -> tuple[Repo
                           fix="未拍板的锁不能当闸门判据：要么让用户在项目卡里逐字确认它，"
                               "要么把它从 audit_rules.json 删掉")
 
-    tbl, srep = load_shot_table(proj, rules, materials=materials)
-    rep.items.extend(srep.items)
-    shots = tbl.get("shots") or []
-
     # ── 节拍覆盖：**这是"骑车赶到菜市整拍丢失"那类事故的唯一防线** ──
+    # 先把**全项目**每一拍归哪一场算出来：串场认领要能报出"它属于哪一场"，
+    # 那比"戏里没这一拍"有用得多（2026-09-21：原先 BEAT-02 先命中，
+    # BEAT-04 永远轮不到，诊断退化成"拍号写错了"）。
+    other_scenes: dict[str, str] = {}
+    for other_id in (rules.get("beat_scope") or {}):
+        if other_id == sid_now:
+            continue
+        for b in beat_scope(rules, other_id):
+            other_scenes.setdefault(b, other_id)
+
     claimed: dict[str, list[str]] = {b: [] for b in beats}
     for s in shots:
         for b in s.get("beats") or []:
-            if b not in beats:
+            # 判据的**先后顺序决定诊断质量**（2026-09-21 两轮才摆对）：
+            #   ① 全项目都没有这个拍号 → BEAT-02「根本不存在」（最严重，先报）
+            #   ② 它属于别的场次        → BEAT-04「串场了，它属于 SCN-0x」
+            #   ③ 其余                  → 本场正常认领
+            # 反过来写的话，一个不存在的 B9 会被报成"不属于本场次"，
+            # 指向"去改 beat_scope"，而真正该做的是把拍号改对。
+            if b not in beats and b not in other_scenes:
                 rep.error("BEAT-02",
-                          f"镜头 {s.get('id')} 认领了戏里不存在的节拍 {b}",
-                          fix="分镜不许新增剧情决定（pipeline/docs/02 规则七）")
+                          f"镜头 {s.get('id')} 认领了**全项目都不存在**的节拍 {b}",
+                          fix="分镜不许新增剧情决定（pipeline/docs/02 规则七）；"
+                              "拍号写错了就照该场戏文件里的 B 号改")
+            elif scope_ids and b not in scope_ids:
+                rep.error("BEAT-04",
+                          f"镜头 {s.get('id')} 认领了 {b}，但这一拍**不属于本场次**"
+                          + (f"，它属于场次 {other_scenes[b]}" if b in other_scenes
+                             else f"（本场只管 {'、'.join(sorted(scope_ids))}）"),
+                          fix="拆场次后节拍要各归各场；要么改镜头表，要么改 beat_scope")
             else:
                 claimed[b].append(s.get("id"))
 
-    for bid, b in beats.items():
+    for bid, b in scene_beats.items():
         if not claimed[bid]:
             rep.error("BEAT-01",
                       f"节拍 {bid}「{b['header']}」**没有任何镜头认领** —— 这一拍会整段消失在成片里",
@@ -596,7 +730,10 @@ def check_chain(proj: Path, rules: dict, materials: str = "error") -> tuple[Repo
     if total:
         rep.info("SHOT-03", f"{len(shots)} 镜共 {total} 帧 ＝ {total / fps:.2f} 秒")
 
-    return rep, {"beats": beats, "shots": shots, "fps": fps, "total_frames": total}
+    return rep, {"beats": beats, "shots": shots, "fps": fps,
+                 "total_frames": total,
+                 "table": table_rel or rules.get("shot_table"),
+                 "script": rel_script}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1062,8 +1199,25 @@ def audit_path(proj: Path, subject: str) -> Path:
     return d / f"{subject}.audit.json"
 
 
+def _chain_for(proj: Path, rules: dict, table_rel: str | None = None,
+               materials: str = "error"):
+    """取「当前场次」的层链。`table_rel` 不给就用项目级登记的那一份。"""
+    return check_chain(proj, rules, materials=materials, table_rel=table_rel)
+
+
+def _merge_reports(rep: Report, extra: Report, prefix: str = "") -> Report:
+    """把一份子报告并进主报告（**保留原有 level**，不一律升成 ERROR）。"""
+    for it in extra.items:
+        msg = f"[{prefix}] {it['msg']}" if prefix else it["msg"]
+        rep.add(it["level"], it["code"], msg,
+                **{k: v for k, v in it.items() if k not in ("level", "code", "msg")})
+    return rep
+
+
 def cmd_preflight(proj: Path, wf_name: str, rules: dict, as_json: bool) -> int:
-    crep, chain = check_chain(proj, rules)
+    # 多场次：先认这条工作流属于哪一场，用那一场的链 —— **不许拿别的场的镜头表去判它**
+    rel = table_for_workflow(proj, rules, wf_name)
+    crep, chain = _chain_for(proj, rules, rel)
     rep, packet = check_workflow(proj, wf_name, rules, chain)
     packet["chain"] = crep.dump()
     PACKET_DIR.mkdir(parents=True, exist_ok=True)
@@ -1184,7 +1338,19 @@ def cmd_verify(proj: Path, subject: str, rules: dict, quiet: bool = False) -> in
 #  第三道：项目完成后的**流程**审计
 # ══════════════════════════════════════════════════════════════════════
 def cmd_postflight(proj: Path, rules: dict, as_json: bool) -> int:
-    crep, chain = check_chain(proj, rules)
+    # ⚠️ **多场次：逐场次各跑一遍链，再合并。**
+    # 只跑项目级那一份的话，第二个场次的镜头表**根本不会被审计** ——
+    # 那是"检查器没跑到"，比报错更危险（规矩 §5.C 第 12 条同理）。
+    crep = Report(f"层链与节拍覆盖 · {proj.name}（全 {len(all_shot_tables(proj, rules))} 场）")
+    chain: dict = {"beats": {}, "shots": [], "fps": 24, "total_frames": 0, "tables": []}
+    for rel in all_shot_tables(proj, rules):
+        one, ch = check_chain(proj, rules, table_rel=rel)
+        _merge_reports(crep, one, prefix=Path(rel).stem)
+        chain["beats"].update(ch.get("beats") or {})
+        chain["shots"].extend(ch.get("shots") or [])
+        chain["total_frames"] += int(ch.get("total_frames") or 0)
+        if ch.get("table"):
+            chain["tables"].append(ch["table"])
     per_wf = []
     for wf in sorted((proj / "workflows").glob("*.json")):
         r, _pk = check_workflow(proj, wf.stem, rules, chain)
@@ -1229,7 +1395,11 @@ def cmd_postflight(proj: Path, rules: dict, as_json: bool) -> int:
 
 
 def cmd_status(proj: Path, rules: dict) -> int:
-    crep, chain = check_chain(proj, rules)
+    # 多场次：逐场次跑链
+    crep = Report(f"层链与节拍覆盖 · {proj.name}（全 {len(all_shot_tables(proj, rules))} 场）")
+    for rel in all_shot_tables(proj, rules):
+        one, _ch = check_chain(proj, rules, table_rel=rel)
+        _merge_reports(crep, one, prefix=Path(rel).stem)
     crep.print()
     print("\n审计封条：")
     d = proj / "review" / "audits"
@@ -1253,35 +1423,36 @@ def cmd_sync_prompts(proj: Path, rules: dict) -> int:
     **这是派生物，不做任何内容决定** —— 纯粹把已经存在的工作流里的文本复制出来，
     让 `prompts/` 这一层真正落地（规矩 §1），也让提示词能被 diff、能在工作流被改写后幸存。
     """
-    _rep, chain = check_chain(proj, rules)
-    shots = chain.get("shots") or []
+    # ⚠️ 多场次：逐场次抽 —— 只抽项目级那一份的话，别的场次的提示词**根本不会落地**
     d = proj / "prompts"
     d.mkdir(parents=True, exist_ok=True)
     written, missing = [], []
-    for s in shots:
-        sid, wfn = s.get("id"), s.get("workflow")
-        if not sid:
-            continue
-        if not wfn or not (proj / "workflows" / f"{wfn}.json").exists():
-            missing.append(f"{sid}（工作流文件不存在，提示词已丢失）")
-            continue
-        wf = load_workflow(proj / "workflows" / f"{wfn}.json")
-        h3 = h3_nodes(wf)
-        if h3:
-            prompt = (h3[0].get("widgets_values") or [""])[0] or ""
-        else:
-            sampler = next((n for n in wf.get("nodes", []) if n.get("type") in
-                            ("KSampler", "KSamplerAdvanced", "SamplerCustom",
-                             "SamplerCustomAdvanced")), None)
-            prompt = upstream_text(wf, sampler["id"], "positive") if sampler else ""
-        if not prompt.strip():
-            missing.append(f"{sid}（取不到正向提示词）")
-            continue
-        f = d / f"{sid}.prompt.md"
-        old = read(f) if f.exists() else None
-        f.write_text(prompt, encoding="utf-8")
-        written.append(f"{sid} ← workflows/{wfn}.json" +
-                       ("（覆盖了旧版）" if old is not None else ""))
+    for rel_tbl in all_shot_tables(proj, rules):
+        _rep, chain = check_chain(proj, rules, table_rel=rel_tbl)
+        for s in chain.get("shots") or []:
+            sid, wfn = s.get("id"), s.get("workflow")
+            if not sid:
+                continue
+            if not wfn or not (proj / "workflows" / f"{wfn}.json").exists():
+                missing.append(f"{sid}（工作流文件不存在，提示词已丢失）")
+                continue
+            wf = load_workflow(proj / "workflows" / f"{wfn}.json")
+            h3 = h3_nodes(wf)
+            if h3:
+                prompt = (h3[0].get("widgets_values") or [""])[0] or ""
+            else:
+                sampler = next((n for n in wf.get("nodes", []) if n.get("type") in
+                                ("KSampler", "KSamplerAdvanced", "SamplerCustom",
+                                 "SamplerCustomAdvanced")), None)
+                prompt = upstream_text(wf, sampler["id"], "positive") if sampler else ""
+            if not prompt.strip():
+                missing.append(f"{sid}（取不到正向提示词）")
+                continue
+            f = d / f"{sid}.prompt.md"
+            old = read(f) if f.exists() else None
+            f.write_text(prompt, encoding="utf-8")
+            written.append(f"{sid} ← workflows/{wfn}.json" +
+                           ("（覆盖了旧版）" if old is not None else ""))
     print(f"✅ 已同步 {len(written)} 份提示词到 {d.relative_to(proj)}：")
     for w in written:
         print(f"   - {w}")
@@ -1307,10 +1478,26 @@ def main() -> int:
     rules = load_rules(proj)
 
     if a.cmd == "chain":
-        rep, chain = check_chain(proj, rules)
+        # 多场次：逐场次报，**合并成一份结论**
+        # ⚠️ `materials="pending"`：这条命令是**平时随便看**用的，
+        # 「首帧／工作流还没产出」在这个时点不是错（那是 S2 登记时就要写下的东西）。
+        # 一律报 ERROR 会让人以为"链坏了"，而真正该拦的时点是 S6/S8（推 GPU 之前）。
+        # 要严格版（产物必须在）用 `pipeline.py gate <项目> S6`。
+        tables = all_shot_tables(proj, rules)
+        rep = Report(f"层链与节拍覆盖 · {proj.name}（全 {len(tables)} 场）")
+        merged: dict = {"beats": {}, "shots": [], "tables": []}
+        for rel in tables:
+            one, ch = check_chain(proj, rules, materials="pending", table_rel=rel)
+            _merge_reports(rep, one, prefix=Path(rel).stem)
+            merged["beats"].update(ch.get("beats") or {})
+            merged["shots"].extend(ch.get("shots") or [])
+            merged["tables"].append(rel)
+        chain = merged
         if a.json:
             print(json.dumps({"report": rep.dump(), "beats": chain.get("beats"),
-                              "shots": chain.get("shots")}, ensure_ascii=False, indent=2))
+                              "shots": chain.get("shots"),
+                              "tables": chain.get("tables")},
+                             ensure_ascii=False, indent=2))
         else:
             rep.print()
         return 0 if rep.ok() else 1

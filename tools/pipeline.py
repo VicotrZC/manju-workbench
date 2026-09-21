@@ -349,15 +349,29 @@ def pick_scene(proj: Path, rules: dict, scene_id: str | None):
         raise SystemExit(f"❌ 没有这个场次：{scene_id}\n现有：{[s['id'] for s in scenes]}")
     if len(scenes) == 1:
         return scenes[0]
+    # 多个场次：按 audit_rules.json 的顺序取第一个**明确指明的**方式。
+    # ⚠️ 仍然不许"随便挑一个" —— 只认下面两种显式声明，都没有就报错。
     declared = (rules.get("shot_table") or "").replace("\\", "/")
     for s in scenes:
         if s["file"].replace("\\", "/") == declared:
             return s
+    default_id = str(rules.get("default_scene") or "").strip()
+    if default_id:
+        key = default_id.replace("-", "").lower()
+        for s in scenes:
+            if s["id"] == default_id or \
+               Path(s["file"]).stem.replace("-", "").lower().startswith(key):
+                return s
+        raise SystemExit(
+            f"❌ audit_rules.json 的 `default_scene` = {default_id!r} 对不上任何镜头表：\n"
+            + "\n".join(f"   - {s['id']}（{s['file']}，{s['shots']} 镜）" for s in scenes))
     raise SystemExit(
-        f"❌ 找到 {len(scenes)} 份镜头表，且 audit_rules.json 的 `shot_table` 没指明用哪一份：\n"
+        f"❌ 找到 {len(scenes)} 份镜头表，且 audit_rules.json 没指明用哪一份：\n"
         + "\n".join(f"   - {s['file']}（{s['shots']} 镜）" for s in scenes)
-        + "\n→ 要么删掉多余的那份，要么在 audit_rules.json 里把 `shot_table` 写清。"
-          "\n  **程序不替你挑** —— 挑错了整场都白做。")
+        + "\n→ 三种办法（**程序不替你挑** —— 挑错了整场都白做）："
+          "\n  ① 用 `--scene <场次>` 指定；"
+          "\n  ② 在 audit_rules.json 里把 `default_scene` 写成你要的那一场；"
+          "\n  ③ 把 `shot_table` 指向它。")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -443,7 +457,8 @@ def gate_S2(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
                         "没留档就丢了 —— 那正是本项目 S02 丢提示词的原因")
 
     # ── 逻辑：节拍覆盖（交给审计层，只有一份判据）──
-    sub, _chain = PA.check_chain(proj, rules, materials="pending")
+    sub, _chain = PA.check_chain(proj, rules, materials="pending",
+                                 table_rel=scene.get("file"))
     for it in sub.items:
         if it["level"] == "INFO":
             continue
@@ -469,7 +484,8 @@ def gate_S3(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
     S3 的职责是**读镜头表，核站得住脚的东西**：节拍覆盖、字段齐、帧数网格、
     命名不串档。文件在不在，是 S6 写完、S8 推 GPU 之前才该拦的事。
     """
-    rep, chain = PA.check_chain(proj, rules, materials="pending")
+    rep, chain = PA.check_chain(proj, rules, materials="pending",
+                                table_rel=scene.get("file"))
     r = Rep("S3")
     for it in rep.items:
         if it["level"] == "INFO":
@@ -553,7 +569,8 @@ def gate_S6(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
     """
     r = Rep("S6")
     # 产物此刻必须都在：**S2/S3 放行的 PENDING 在这里兑现**
-    _crep, chain = PA.check_chain(proj, rules, materials="error")
+    _crep, chain = PA.check_chain(proj, rules, materials="error",
+                                  table_rel=scene.get("file"))
     for it in _crep.items:
         if it["level"] == "ERROR":
             r.e(it["code"], it["msg"],
@@ -1238,46 +1255,70 @@ def cmd_scaffold(proj: Path, scene_id: str | None, write: bool) -> int:
 # ══════════════════════════════════════════════════════════════════════
 #  S7 的批量动作：逐镜出审计包 / 逐镜封存
 # ══════════════════════════════════════════════════════════════════════
-def cmd_audit_all(proj: Path, scene_id: str | None) -> int:
+def _scenes_for_batch(proj: Path, rules: dict, scene_id: str | None,
+                      all_scenes: bool) -> list[dict]:
+    """批量命令要跑哪几场。
+
+    ⚠️ **多场次项目下，"只跑默认那一场"是最危险的失败方式** ——
+    它不报错，只是悄悄漏掉另一个场次（`audit-all` 少出包、`seal-all` 少封条）。
+    所以 `--all-scenes` 存在，而且给了 `--scene` 又说 all 会直接报错，不猜。
+    """
+    if all_scenes and scene_id:
+        raise SystemExit("❌ `--scene` 与 `--all-scenes` 不能同时给 —— 要全跑就别指定场次")
+    if all_scenes:
+        out = find_scenes(proj, rules)
+        bad = [s for s in out if s.get("bad")]
+        if bad:
+            raise SystemExit("❌ 有镜头表读不出来，先修：" +
+                             "；".join(f"{b['id']}（{b['bad']}）" for b in bad))
+        return out
+    return [pick_scene(proj, rules, scene_id)]
+
+
+def cmd_audit_all(proj: Path, scene_id: str | None, all_scenes: bool = False) -> int:
     """给每一镜出审计包（preflight）。**这只是备料，判定由模型写。**"""
     rules = PA.load_rules(proj)
-    scene = pick_scene(proj, rules, scene_id)
+    scenes = _scenes_for_batch(proj, rules, scene_id, all_scenes)
     n = 0
-    for s in (scene.get("t") or {}).get("shots") or []:
-        wf = s.get("workflow")
-        if not wf or not (proj / "workflows" / f"{wf}.json").exists():
-            print(f"⚠️  {s.get('id')} 跳过（工作流不存在：{wf}）")
-            continue
-        print(f"── {s['id']}  {wf}")
-        PA.cmd_preflight(proj, wf, rules, as_json=False)
-        n += 1
-    print(f"\n📦 出了 {n} 份审计包（.work/audit/packets/）")
+    for scene in scenes:
+        print(f"\n══ 场次 {scene['id']} {scene.get('name','')}")
+        for s in (scene.get("t") or {}).get("shots") or []:
+            wf = s.get("workflow")
+            if not wf or not (proj / "workflows" / f"{wf}.json").exists():
+                print(f"⚠️  {s.get('id')} 跳过（工作流不存在：{wf}）")
+                continue
+            print(f"── {s['id']}  {wf}")
+            PA.cmd_preflight(proj, wf, rules, as_json=False)
+            n += 1
+    print(f"\n📦 出了 {n} 份审计包（.work/audit/packets/，{len(scenes)} 场）")
     print("   下一步：模型读审计包写判定 → review/audits/<工作流>.verdict.json")
     return 0
 
 
-def cmd_seal_all(proj: Path, scene_id: str | None) -> int:
+def cmd_seal_all(proj: Path, scene_id: str | None, all_scenes: bool = False) -> int:
     """把 `review/audits/<工作流>.verdict.json` 逐个封存。缺判定的报出来。"""
     rules = PA.load_rules(proj)
-    scene = pick_scene(proj, rules, scene_id)
+    scenes = _scenes_for_batch(proj, rules, scene_id, all_scenes)
     ok = miss = 0
-    for s in (scene.get("t") or {}).get("shots") or []:
-        wf = s.get("workflow")
-        if not wf:
-            continue
-        vf = proj / "review" / "audits" / f"{wf}.verdict.json"
-        if not vf.exists():
-            print(f"⚠️  {s['id']}  {wf} —— 没有判定文件 {vf.name}，跳过")
-            miss += 1
-            continue
-        print(f"── {s['id']}  {wf}")
-        try:
-            if PA.cmd_seal(proj, wf, str(vf), rules) == 0:
-                ok += 1
-        except SystemExit as exc:
-            print(f"   ⛔ {exc}")
-            miss += 1
-    print(f"\n🔒 封存 {ok} 条，缺/失败 {miss} 条")
+    for scene in scenes:
+        print(f"\n══ 场次 {scene['id']} {scene.get('name','')}")
+        for s in (scene.get("t") or {}).get("shots") or []:
+            wf = s.get("workflow")
+            if not wf:
+                continue
+            vf = proj / "review" / "audits" / f"{wf}.verdict.json"
+            if not vf.exists():
+                print(f"⚠️  {s['id']}  {wf} —— 没有判定文件 {vf.name}，跳过")
+                miss += 1
+                continue
+            print(f"── {s['id']}  {wf}")
+            try:
+                if PA.cmd_seal(proj, wf, str(vf), rules) == 0:
+                    ok += 1
+            except SystemExit as exc:
+                print(f"   ⛔ {exc}")
+                miss += 1
+    print(f"\n🔒 封存 {ok} 条，缺/失败 {miss} 条（{len(scenes)} 场）")
     return 0 if miss == 0 else 1
 
 
@@ -1301,21 +1342,27 @@ def _read_if(proj: Path, rel: str | None) -> str:
     return read(p) if p.exists() else ""
 
 
-def _beats_digest(proj: Path, rules: dict) -> str:
-    """从戏文件里**只抽九拍表**（节拍是分镜唯一的权威）。
+def _beats_digest(proj: Path, rules: dict, scene: dict | None = None) -> str:
+    """从戏文件里**只抽节拍表**（节拍是分镜唯一的权威）。
 
     2026-09-21：原来把整份戏塞进作业单，连带 §三秒数核算／§四自检／§五待决问题
     一起喂进去。那些章节对分镜没用，纯烧额度 —— 实测模型思考到 48063 字符把
     max_tokens 吃光，JSON 断在半句。**给模型的上下文要只有它真正要用的那部分。**
+
+    同日拆场次后：**按场次读它自己那份戏**（`beat_scope[场次].script`），
+    读不到才回落到项目级 `script`。
     """
-    rel = rules.get("script")
+    rel = None
+    if scene:
+        rel = (PA.scene_plan(rules, scene.get("id") or "").get("script"))
+    rel = rel or rules.get("script")
     txt = _read_if(proj, rel)
     if not txt:
         return ""
     lines = txt.splitlines()
     out, on = [], False
     for ln in lines:
-        if ln.startswith("## 二、九拍表"):
+        if ln.startswith("## 二、") and "拍表" in ln:      # 九拍表 / 节拍表
             on = True
             continue
         if on and ln.startswith("## 三、"):
@@ -1335,18 +1382,27 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
         # ⚠️ 写出路径**必须用 audit_rules.json 登记的那一个**，不许按 scene['id'] 拼 ——
         # 文件名 `SCN01_…` 与字段 `scene:"SCN-01"` 不一致，拼出来的会是另一个文件，
         # 于是项目里多出一份镜头表，程序静默读了坏的那份（2026-09-21 实测）。
-        out = rules.get("shot_table") or f"storyboard/{sid}_镜头表.json"
+        #
+        # 拆场次后（同日）：**多场次项目的 `shot_table` 单值不再是本场的答案**，
+        # 本场的镜头表就是 `scene['file']`（pick_scene 已经选中的那一份）。
+        multi = len(find_scenes(proj, rules)) > 1
+        out = scene.get("file") if multi else (
+            rules.get("shot_table") or f"storyboard/{sid}_镜头表.json")
+        # 本场自己的戏与 GEO（拆场次后一场一份）
+        plan = PA.scene_plan(rules, sid)
+        my_script = plan.get("script") or rules.get("script")
+        my_geo = scene.get("t", {}).get("geo") or rules.get("geo_file")
         return {
             "name": "分镜（机器可读镜头表）",
             "out": out,
             "gate": "S3",
             "ask": f"""把这一场的戏改成**机器可读镜头表**。
 
-## 上游：戏的九拍表（节拍是唯一权威，分镜只能认领，不能新增）
-{_beats_digest(proj, rules)}
+## 上游：戏的节拍表（节拍是唯一权威，分镜只能认领，不能新增）
+{_beats_digest(proj, rules, scene)}
 
 ## 上游：GEO 空间地图（站位/机位/光源）
-{_read_if(proj, rules.get('geo_file'))}
+{_read_if(proj, my_geo)}
 
 ## 现有的镜头表（**在它基础上改，别推倒重来**）
 {json.dumps(t, ensure_ascii=False, indent=2) if t else "（还没有）"}
@@ -1355,9 +1411,9 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
 {{
   "scene": "{sid}", "scene_name": "...", "episode": "...",
   "canvas": [1376, 768], "fps": 24,
-  "script": "{rules.get('script')}", "geo": "{rules.get('geo_file')}",
+  "script": "{my_script}", "geo": "{my_geo}",
   "shots": [
-    {{"id": "S01", "beats": ["B2"],
+    {{"id": "S01", "beats": ["B1"],
       "shot_size": "中景", "framing_en": "A static medium shot, camera at eye level ...",
       "camera": "CAM1", "lens_mm": 35, "dist_m": 3.5, "visible_w_m": 3.6,
       "frames": 175, "duration_s": 7.29,
@@ -1686,6 +1742,9 @@ def main() -> int:
     ap.add_argument("target", nargs="?", help="阶段 id / 文件（gate/brief/seal/gen 用）")
     ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON")
     ap.add_argument("--scene", default=None)
+    ap.add_argument("--all-scenes", action="store_true",
+                    help="批量命令（audit-all / seal-all）跑**全部场次**，"
+                         "而不是只跑默认那一场")
     ap.add_argument("--shot", default=None, help="run 用：只跑某一镜")
     ap.add_argument("--rounds", type=int, default=3, help="gen 用：最多打回重做几轮")
     ap.add_argument("--port", type=int, default=8788)
@@ -1715,10 +1774,10 @@ def main() -> int:
         return cmd_scaffold(proj, a.scene, a.write)
 
     if a.cmd == "audit-all":
-        return cmd_audit_all(proj, a.scene)
+        return cmd_audit_all(proj, a.scene, a.all_scenes)
 
     if a.cmd == "seal-all":
-        return cmd_seal_all(proj, a.scene)
+        return cmd_seal_all(proj, a.scene, a.all_scenes)
 
     if a.cmd == "gen":
         if not a.target:
