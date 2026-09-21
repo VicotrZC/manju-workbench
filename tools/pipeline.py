@@ -258,7 +258,12 @@ def _quiet_verify(proj: Path, subject: str, rules: dict) -> int:
 
 
 class Rep:
-    """门禁结果。ERROR = 卡住，WARN = 提示。"""
+    """门禁结果。ERROR = 卡住，WARN = 提示，**PENDING = 产物还没产出，轮不到它**。
+
+    PENDING 与 ERROR 分开的理由见 `pipeline_audit.Report` 的注释：
+    「引用了一个还没产出的产物」和「引用了一个根本不存在的产物」是两件事。
+    前者在 S2（首帧还没出）是正常的，后者在 S8（要推 GPU 了）才是致命的。
+    """
     def __init__(self, stage: str):
         self.stage = stage
         self.items: list[dict] = []
@@ -272,6 +277,9 @@ class Rep:
     def i(self, code, msg, **kw):
         self.items.append({"level": "INFO", "code": code, "msg": msg, **kw})
 
+    def p(self, code, msg, **kw):
+        self.items.append({"level": "PENDING", "code": code, "msg": msg, **kw})
+
     @property
     def errors(self):
         return [x for x in self.items if x["level"] == "ERROR"]
@@ -280,13 +288,17 @@ class Rep:
     def warns(self):
         return [x for x in self.items if x["level"] == "WARN"]
 
+    @property
+    def pendings(self):
+        return [x for x in self.items if x["level"] == "PENDING"]
+
     def ok(self):
         return not self.errors
 
     def dump(self):
         return {"stage": self.stage, "ok": self.ok(),
                 "errors": len(self.errors), "warns": len(self.warns),
-                "items": self.items}
+                "pending": len(self.pendings), "items": self.items}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -384,33 +396,92 @@ def gate_S1(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
 
 
 def gate_S2(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
+    """分镜门禁 = **schema ＋ 逻辑**。
+
+    ⚠️ 2026-09-21 修的判据错位：这一关原来直接跑 `check_chain` 的 file 存在性，
+    于是它要求「首帧文件必须在盘上」—— 而首帧是**拿镜头表里登记的名字**去出的，
+    出图又排在它后面的 S6。**先有鸡还是先有蛋 → S2 永远过不去。**
+    实测后果：模型跑满 3 轮、白烧额度、最后记一份假失败。
+
+    所以这里用 `materials="pending"`：**引用还没产出的产物不算错**（那是 S6/S8 的事），
+    S2 只管「这张表自己合不合规矩」。真到了推 GPU 那一刻还不存在，S8 会拦死。
+    """
     r = Rep("S2")
     t = scene.get("t") or {}
     shots = t.get("shots") or []
     if not shots:
         r.e("S2-01", "镜头表里没有镜头")
         return r
+
     for s in shots:
+        sid = s.get("id", "?")
         for k in ("id", "beats", "shot_size", "lens_mm", "dist_m", "frames",
-                  "first_frame", "workflow"):
+                  "first_frame", "first_frame_workflow", "workflow"):
             if not s.get(k):
-                r.e("S2-02", f"镜头 {s.get('id')} 缺字段 `{k}`")
-    r.i("S2-OK", f"{len(shots)} 镜登记齐")
+                r.e("S2-02", f"镜头 {sid} 缺字段 `{k}`")
+        # ── 帧数网格：不落在 17k+5 上，H3 直接跑不出来 ──
+        try:
+            n = int(s.get("frames"))
+            if (n - 5) % 17 != 0:
+                r.e("S2-03", f"镜头 {sid} 的 frames={n} 不在 **17k+5** 网格上"
+                             f"（…158/175/192…）—— H3 会直接跑不出来")
+        except (TypeError, ValueError):
+            r.e("S2-04", f"镜头 {sid} 的 frames 不是整数：{s.get('frames')!r}")
+
+    # ── 一镜一条工作流：**共用就是"改完再跑"，上一镜的提示词没留档就没了** ──
+    # 本项目 S02 的提示词就是这么丢的（镜头表 known_gaps 第 2 条）。
+    for key, code, what in (("workflow", "S2-05", "镜头工作流"),
+                            ("first_frame_workflow", "S2-06", "首帧工作流")):
+        owner: dict[str, list[str]] = {}
+        for s in shots:
+            if s.get(key):
+                owner.setdefault(s[key], []).append(s.get("id"))
+        for name, ids in owner.items():
+            if len(ids) > 1:
+                r.e(code, f"{what} `{name}` 被 {len(ids)} 个镜头共用：{'、'.join(ids)}",
+                    fix="一镜一条。共用意味着改提示词再跑，上一镜的提示词"
+                        "没留档就丢了 —— 那正是本项目 S02 丢提示词的原因")
+
+    # ── 逻辑：节拍覆盖（交给审计层，只有一份判据）──
+    sub, _chain = PA.check_chain(proj, rules, materials="pending")
+    for it in sub.items:
+        if it["level"] == "INFO":
+            continue
+        (r.e if it["level"] == "ERROR" else
+         r.w if it["level"] == "WARN" else r.p)(it["code"], it["msg"],
+                                                **{k: v for k, v in it.items()
+                                                   if k not in ("level", "code", "msg")})
+    if r.ok():
+        pend = len(r.pendings)
+        r.i("S2-OK", f"{len(shots)} 镜登记齐"
+                     + (f"；另有 {pend} 项产物**还没出**（轮到 S6/S8 再拦）" if pend else ""))
     return r
 
 
 def gate_S3(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
-    """验分镜 = 直接复用审计程序的层链检查（只有一份判据，不抄第二份）。"""
-    rep, chain = PA.check_chain(proj, rules)
+    """验分镜 = 核「分镜这张表本身合不合规矩」。
+
+    ⚠️ 2026-09-21 修的判据错位：原来固定用 `materials="error"` 调 `check_chain`，
+    于是 S3 要求「首帧图 / 工作流文件必须在盘上」—— **而那三样全是 S6 才产出的**，
+    S3 排在 S6 前面（S3 产出 prompts/*.md，S6 产出 workflows/*.json）。
+    结果：S3 永远不过 → S4 依赖 S3 → **整条线在第一步死锁**。
+
+    S3 的职责是**读镜头表，核站得住脚的东西**：节拍覆盖、字段齐、帧数网格、
+    命名不串档。文件在不在，是 S6 写完、S8 推 GPU 之前才该拦的事。
+    """
+    rep, chain = PA.check_chain(proj, rules, materials="pending")
     r = Rep("S3")
     for it in rep.items:
         if it["level"] == "INFO":
             continue
-        (r.e if it["level"] == "ERROR" else r.w)(it["code"], it["msg"],
-                                                 **{k: v for k, v in it.items()
-                                                    if k not in ("level", "code", "msg")})
+        (r.e if it["level"] == "ERROR" else
+         r.w if it["level"] == "WARN" else r.p)(it["code"], it["msg"],
+                                                **{k: v for k, v in it.items()
+                                                   if k not in ("level", "code", "msg")})
     if r.ok():
-        r.i("S3-OK", "节拍覆盖 / 镜头表 / 首帧血缘 全部通过")
+        pend = len(r.pendings)
+        r.i("S3-OK", "节拍覆盖 / 镜头表 / 帧数网格 全部通过"
+                     + (f"；另有 {pend} 项产物**还没出**（轮到 S6/S8 再拦）" if pend else ""))
     return r
 
 
@@ -474,9 +545,19 @@ def gate_S5(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
 
 
 def gate_S6(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
-    """写提示词：每镜跑全套 WF-* 不变量。"""
+    """写提示词：每镜跑全套 WF-* 不变量。
+
+    这里**是"文件必须在"的第一关** —— S6 的产出就是 `workflows/*.json` 与
+    `prompts/<镜号>.prompt.md`。所以用 `materials="error"`：S6 说写完了，
+    那些文件就必须真在。这是 S2/S3 那批 PENDING 兑现的地方。
+    """
     r = Rep("S6")
-    _crep, chain = PA.check_chain(proj, rules)
+    # 产物此刻必须都在：**S2/S3 放行的 PENDING 在这里兑现**
+    _crep, chain = PA.check_chain(proj, rules, materials="error")
+    for it in _crep.items:
+        if it["level"] == "ERROR":
+            r.e(it["code"], it["msg"],
+                **{k: v for k, v in it.items() if k not in ("level", "code", "msg")})
     done = 0
     for s in (scene.get("t") or {}).get("shots") or []:
         wf = s.get("workflow")
@@ -674,6 +755,7 @@ def scan(proj: Path, scene_id: str | None = None, only: str | None = None) -> di
     return {"project": proj.name, "scene": {k: v for k, v in scene.items() if k != "t"},
             "scene_raw": scene.get("t"), "stages": rows,
             "next_action": first_fail, "rules_file": "audit_rules.json",
+            "only": only,
             "checked_at": datetime.now().isoformat(timespec="seconds")}
 
 
@@ -708,7 +790,8 @@ def print_status(res: dict):
     for s in res["stages"]:
         n = s["report"]["errors"]
         w = s["report"]["warns"]
-        tail = f"  ERROR {n} / WARN {w}"
+        p = s["report"].get("pending", 0)
+        tail = f"  ERROR {n} / WARN {w}" + (f" / 待产出 {p}" if p else "")
         wait = ""
         if s.get("waiting_on") and s["status"] != "pass":
             wait = f"（轮不到：上面卡在 {s['waiting_on']}）"
@@ -722,9 +805,21 @@ def print_status(res: dict):
                 print(f"      ❌ [{it['code']}] {it['msg']}")
             elif it["level"] == "WARN":
                 print(f"      ⚠️  [{it['code']}] {it['msg']}")
+        # PENDING 单列：**它不是错，但也不能藏起来** —— 到 S8 会被提成错
+        pend = [it for it in s["report"]["items"] if it["level"] == "PENDING"]
+        for it in pend[:3]:
+            print(f"      ⏳ [{it['code']}] {it['msg']}")
+        if len(pend) > 3:
+            print(f"      ⏳ …另有 {len(pend) - 3} 项同类（step 没走到，不算错）")
     print("─" * 78)
     nxt = res.get("next_action")
-    if nxt is None:
+    # ⚠️ `gate <项目> <阶段>` 只扫一个阶段，那时"没有 next_action"**不代表全线通过**。
+    # 原来这里无条件打「🎬 全阶段通过」，单跑一个门禁也会显示全线绿 —— 假信号。
+    partial = bool(res.get("only"))
+    if nxt is None and partial:
+        print(f"（只扫了 {res['only']} 一个阶段；这不是全线结论，"
+              f"看全貌跑 `pipeline.py status {res['project']}`）")
+    elif nxt is None:
         print("🎬 全阶段通过")
     else:
         st = STAGE_BY_ID[nxt]
@@ -1206,6 +1301,31 @@ def _read_if(proj: Path, rel: str | None) -> str:
     return read(p) if p.exists() else ""
 
 
+def _beats_digest(proj: Path, rules: dict) -> str:
+    """从戏文件里**只抽九拍表**（节拍是分镜唯一的权威）。
+
+    2026-09-21：原来把整份戏塞进作业单，连带 §三秒数核算／§四自检／§五待决问题
+    一起喂进去。那些章节对分镜没用，纯烧额度 —— 实测模型思考到 48063 字符把
+    max_tokens 吃光，JSON 断在半句。**给模型的上下文要只有它真正要用的那部分。**
+    """
+    rel = rules.get("script")
+    txt = _read_if(proj, rel)
+    if not txt:
+        return ""
+    lines = txt.splitlines()
+    out, on = [], False
+    for ln in lines:
+        if ln.startswith("## 二、九拍表"):
+            on = True
+            continue
+        if on and ln.startswith("## 三、"):
+            break
+        if on:
+            out.append(ln)
+    body = "\n".join(out).strip()
+    return body or txt
+
+
 def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
     """每个可生成阶段的「要什么、写到哪、写完用什么门禁验」。"""
     sid = scene["id"]
@@ -1222,13 +1342,13 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
             "gate": "S3",
             "ask": f"""把这一场的戏改成**机器可读镜头表**。
 
-## 上游：戏（节拍是唯一权威，分镜只能认领，不能新增）
-{_read_if(proj, rules.get('script'))}
+## 上游：戏的九拍表（节拍是唯一权威，分镜只能认领，不能新增）
+{_beats_digest(proj, rules)}
 
 ## 上游：GEO 空间地图（站位/机位/光源）
 {_read_if(proj, rules.get('geo_file'))}
 
-## 现有的镜头表（如果有，在它基础上改，别推倒重来）
+## 现有的镜头表（**在它基础上改，别推倒重来**）
 {json.dumps(t, ensure_ascii=False, indent=2) if t else "（还没有）"}
 
 ## 输出 schema（严格照抄字段名）
@@ -1253,8 +1373,27 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
 - 镜头不许认领戏里没有的节拍。
 - frames 必须落在 **17k+5** 网格（5/22/39/56/73/90/107/124/141/158/175/192/209/226…）。
 - 一镜一条工作流，**不许两镜共用同一个 workflow 名**。
+- 一镜一条首帧工作流，**`first_frame_workflow` 也不许两镜共用**。
 - 每镜必须有独立的 first_frame。
-- beats 里的编号必须真实存在于上面的戏里。""",
+- beats 里的编号必须真实存在于上面的戏里。
+- **每条 `content` 一句话说完**（这是给人的摘要，不是剧本）；`framing_en` 一行。
+
+## 命名规则（**必须照抄格式，编号随镜号变**）
+把 `<ID>` 换成该镜的镜号（如 S00、S01）：
+- `workflow`             = `EP02SC01_<ID>_h3`        → 写完是 `workflows/EP02SC01_<ID>_h3.json`
+- `first_frame_workflow` = `FF_EP02SC01_<ID>`        → 写完是 `workflows/FF_EP02SC01_<ID>.json`
+- `first_frame`          = `FF_EP02SC01_<ID>_00001_.png`　（落在 `outputs/`，由上面那条工作流出图；
+  序号 `00001_` 是第一次跑，重跑会自增）
+
+> 这三条**不是建议**：盘上真名就是这个规律（`outputs/FF_EP02SC01_S01_00002_.png` 等）。
+> 不要自创 `mz_*.png` 这类名字 —— 出图程序不会产出它，那一镜就永远拿不到首帧。
+> **首帧图此刻还不存在是正常的**（要等出图），但**文件名必须一次写对**。
+
+## 输出纪律（**违反会被打回重做**）
+- 顶层**只写 schema 里列出的字段**。不要 `_about`、不要 `known_gaps`、
+  不要任何 `_` 开头的注释字段 —— 说明文字一律省略。
+- 不要输出任何 schema 之外的键。
+- **省掉说明性文字，把额度留给 shots 数组本身。**""",
         }
 
     if stage_id == "S4":
@@ -1322,7 +1461,20 @@ def _gen_once(proj: Path, stage_id: str, rules: dict, scene: dict,
     try:
         data = llm.chat_json(msgs)
     except Exception as exc:                       # noqa: BLE001
-        return False, f"模型调用失败：{exc}"
+        msg = str(exc)
+        # ── 截断/空正文/JSON 坏了 → **当成"这一轮没过"打回重做**，不当致命错误 ──
+        # 2026-09-21 实测：模型思考 48063 字符吃光 max_tokens，JSON 断在半句。
+        # 旧版在这里 return 失败 → **整轮生成直接退出，自动重做环白写了**。
+        recoverable = any(k in msg for k in
+                          ("JSON 解析失败", "找不到 JSON", "正文是空的", "Unterminated",
+                           "Expecting", "截断"))
+        hint = ("**上一轮你的输出被截断了，JSON 没写完。**"
+                "\n→ 这一次把 `_about` / `known_gaps` 之类的说明字段**全部省掉**，"
+                "\n  只写 schema 里的字段；每条 `content`/`framing_en` 压到一句话。"
+                if recoverable else "")
+        if recoverable and attempt < total:
+            return False, [{"code": "GEN-01", "msg": f"模型调用失败：{msg[:600]}\n{hint}"}]
+        return False, f"模型调用失败：{msg}"
 
     p = proj / out_rel
     p.parent.mkdir(parents=True, exist_ok=True)

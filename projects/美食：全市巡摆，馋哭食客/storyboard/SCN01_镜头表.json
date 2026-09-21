@@ -1,94 +1,104 @@
 {
-  "_about": [
-    "SCN-01 的**机器可读镜头表** —— tools/pipeline_audit.py 的节拍覆盖与取景核对都读它。",
-    "规矩 §1：分镜只能**认领**戏层节拍，不新增剧情决定。`beats` 列的每个 B 号都必须在",
-    "script/EP02_SC01_菜市场买肉_戏.md 里真实存在，且戏里每个 B 拍都必须被至少一镜认领。",
-    "",
-    "⚠️ 本表是**按已批准的分镜表（GEO空间地图 §三）回填**的，不是我新做的决定。",
-    "   回填时暴露出来的问题写在 `known_gaps` 里，逐条可核。"
-  ],
-
   "scene": "SCN-01",
   "scene_name": "凌晨猪肉摊 · 买肉",
   "episode": "EP02",
-  "canvas": [1376, 768],
+  "canvas": [
+    1376,
+    768
+  ],
   "fps": 24,
   "script": "script/EP02_SC01_菜市场买肉_戏.md",
   "geo": "storyboard/SCN01_GEO空间地图.md",
-
   "shots": [
     {
+      "id": "S00",
+      "beats": [
+        "B1"
+      ],
+      "shot_size": "全景",
+      "framing_en": "A static wide shot at eye level on the pre-dawn street, a lit phone screen showing 04:00 in the dark foreground, one street sweeper far down the empty road, Yan Qing riding his small e-bike out of frame toward the market.",
+      "camera": "CAM0",
+      "lens_mm": 24,
+      "dist_m": 4.0,
+      "visible_w_m": 6.0,
+      "frames": 175,
+      "duration_s": 7.29,
+      "first_frame": "FF_EP02SC01_S00_00001_.png",
+      "first_frame_workflow": "FF_EP02SC01_S00",
+      "workflow": "EP02SC01_S00_h3",
+      "content": "四点空街：手机屏幕在黑暗里亮起04:00，闫清从被窝坐起、骑小电驴出门，整条街只有环卫工人和扫帚声 —— 零对白，两句VO，不出台词。"
+    },
+    {
       "id": "S01",
-      "beats": ["B2"],
+      "beats": [
+        "B2"
+      ],
       "shot_size": "中景",
-      "framing_en": "A static medium shot, camera at eye level taken from the market aisle",
+      "framing_en": "A static medium shot at eye level from the market aisle, both men across the white-tiled counter, Yan Qing on frame left facing north, the butcher on frame right facing south, the stall's five red pendant lamps the only light.",
       "camera": "CAM1",
       "lens_mm": 35,
       "dist_m": 3.5,
       "visible_w_m": 3.6,
       "frames": 175,
       "duration_s": 7.29,
-      "first_frame": "mz_ep02sc01_s01_first.png",
-      "first_frame_workflow": "FF_EP02SC01_shot",
+      "first_frame": "FF_EP02SC01_S01_00001_.png",
+      "first_frame_workflow": "FF_EP02SC01_S01",
       "workflow": "EP02SC01_S01_h3",
-      "content": "开价：闫清看肉，摊主双臂撑台面"
+      "content": "开价：菜市场灯已亮、摊贩理货，闫清直奔猪肉摊问怎么卖，摊主答四十五一斤，闫清嫌贵，心里嘀咕猪肉没这么贵 —— 第一次「钱」的压力。"
     },
     {
       "id": "S02",
-      "beats": ["B3"],
+      "beats": [
+        "B3"
+      ],
       "shot_size": "近景",
-      "framing_en": "A static medium-close shot, camera at eye level taken from the market aisle",
+      "framing_en": "A static medium-close shot at eye level from the market aisle, tighter on the counter surface and the meat between the two men, Yan Qing on frame left, the butcher on frame right raising his chin at the meat.",
       "camera": "CAM2",
       "lens_mm": 50,
       "dist_m": 2.6,
       "visible_w_m": 1.87,
       "frames": 158,
       "duration_s": 6.58,
-      "first_frame": "mz_ff_s02.png",
-      "first_frame_workflow": "FF_EP02SC01_shot",
-      "workflow": null,
-      "content": "黑猪肉：闫清凑近看肉，摊主抬手比肉",
-      "known_gap": "S02 的工作流文件**已被覆盖**，盘上不存在。见 known_gaps 第 2 条。"
+      "first_frame": "FF_EP02SC01_S02_00001_.png",
+      "first_frame_workflow": "FF_EP02SC01_S02",
+      "workflow": "EP02SC01_S02_h3",
+      "content": "黑猪肉：摊主说这是上好的黑猪肉、和普通猪肉不一样，闫清凑到案板前看肉身纹理并伸手按了一下，心里觉得看着是有点儿不一样 —— 他在较真，不是被忽悠。"
     },
     {
       "id": "S03",
-      "beats": ["B4"],
+      "beats": [
+        "B4"
+      ],
       "shot_size": "大特写",
-      "framing_en": "A static close shot, camera at eye level",
+      "framing_en": "A static extreme close shot at eye level, the butcher's phone screen pushed right up into frame, a truckload of live pigs driving through the slaughterhouse gate on that screen, Yan Qing's face frozen then slowly grinning at the edge of frame.",
       "camera": "CAM3",
       "lens_mm": 85,
       "dist_m": 1.4,
       "visible_w_m": 0.59,
       "frames": 192,
       "duration_s": 8.0,
-      "first_frame": "mz_ff_s03.png",
-      "first_frame_workflow": "FF_EP02SC01_shot",
+      "first_frame": "FF_EP02SC01_S03_00001_.png",
+      "first_frame_workflow": "FF_EP02SC01_S03",
       "workflow": "EP02SC01_S03_h3",
-      "content": "★ 承重笑点 K1：摊主举手机，屏幕里活猪走进屠宰场"
+      "content": "★ 承重笑点 K1：闫清问是不是早上现杀的，摊主说刚从屠宰场拉回来不信你看看、掏出手机把屏幕怼到闫清脸上，屏幕里一车活猪被卡车拉进屠宰场大门，闫清先愣住再慢慢咧嘴 —— 认真地问、认真地答、证据本身荒谬，不给猪加悲鸣、不变调。"
     },
     {
       "id": "S04",
-      "beats": ["B5"],
+      "beats": [
+        "B5"
+      ],
       "shot_size": "中景",
-      "framing_en": "A static medium shot, camera at eye level taken from the market aisle",
+      "framing_en": "A static medium shot at eye level from the market aisle, the butcher wrapping the meat on frame right while Yan Qing loads up his e-bike on frame left, dawn light paling at the market mouth behind him.",
       "camera": "CAM1",
       "lens_mm": 35,
       "dist_m": 3.5,
       "visible_w_m": 3.6,
       "frames": 175,
       "duration_s": 7.29,
-      "first_frame": "mz_ff_s04.png",
-      "first_frame_workflow": "FF_EP02SC01_shot",
-      "workflow": "EP02SC01_h3",
-      "content": "五十斤：闫清点头下单，摊主抄刀卸肉",
-      "known_gap": "workflows/EP02SC01_h3.json 里留着的提示词**是 S02（闻肉）的内容**，LoadImage/SaveVideo 却是 S04 的。文件自相矛盾，见 known_gaps 第 2 条。"
+      "first_frame": "FF_EP02SC01_S04_00001_.png",
+      "first_frame_workflow": "FF_EP02SC01_S04",
+      "workflow": "EP02SC01_S04_h3",
+      "content": "五十斤：闫清要五十斤猪肉，摊主笑得合不拢嘴、手脚麻利地装肉并喊小伙子以后多光顾，闫清把小电驴驮满骑出市场，天边开始泛白 —— 第一次下大注，收尾靠天亮讲完时间跨度。"
     }
-  ],
-
-  "known_gaps": [
-    "① **B1 整拍没有镜头** —— 戏里的 B1（四点闹钟／空街只有环卫工人／骑小电驴赶到菜市）在分镜表里被 S01 的 B1–B2 标法吞掉了，S01 实际只演 B2。BEAT-01 会报。",
-    "② **一镜一文件没做到** —— 四镜共用 EP02SC01_h3.json 反复改写，结果 S02 的提示词被覆盖丢失，S04 的位置上留着 S02 的文本。审计链断裂，SHOT-01/SHOT-04/WF-10/WF-16 会报。",
-    "③ **首帧没有归档** —— mz_*.png 本机不存在（只上传到云机用过）。首帧是资产，不归档则不可复现，SHOT-02 会报。",
-    "④ **首帧的画风闸门不过** —— 四张首帧全出自 FF_EP02SC01_shot，那条 t2i 的画风句占比只有 9% 且吊在最后，SHOT-05 会报。"
   ]
 }

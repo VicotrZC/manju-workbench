@@ -77,7 +77,10 @@ DEFAULTS = {
     # 每轮换 id 会丢掉缓存，所以给一个固定的；要分会话就传 session=…
     "session": "manju-workbench",
     "temperature": 0.3,
-    "max_tokens": 8000,
+    # ★ 2026-09-21 实测：deepseek-v4.1-flash 是推理模型，思考与正文**共用** max_tokens。
+    #   配 16000 时思考吃掉全部额度 → 正文为空 / JSON 断在半句。
+    #   探到的天花板：200000 收，1000000 报 HTTP 400。
+    "max_tokens": 200000,
     "timeout_s": 600,
 }
 
@@ -199,15 +202,16 @@ def _chat_via_api(messages: list[dict], cfg: dict, temperature, max_tokens,
                   timeout, retries: int) -> str:
     key = api_key()
     url = cfg["base_url"].rstrip("/") + "/chat/completions"
-    payload = {
-        "model": cfg["model"],
-        "messages": messages,
-        "temperature": cfg["temperature"] if temperature is None else temperature,
-        "max_tokens": cfg["max_tokens"] if max_tokens is None else max_tokens,
-        "stream": False,
-    }
+    mt = cfg["max_tokens"] if max_tokens is None else max_tokens
     last = None
     for i in range(retries + 1):
+        payload = {
+            "model": cfg["model"],
+            "messages": messages,
+            "temperature": cfg["temperature"] if temperature is None else temperature,
+            "max_tokens": mt,
+            "stream": False,
+        }
         try:
             res = _post(url, payload, key, cfg["timeout_s"] if timeout is None else timeout)
             ch = (res.get("choices") or [{}])[0]
@@ -223,12 +227,22 @@ def _chat_via_api(messages: list[dict], cfg: dict, temperature, max_tokens,
                 raise LLMError(
                     "模型返回的正文是空的"
                     + ("（只有 reasoning_content，长度 %d）" % len(r) if r else "")
-                    + "。\n推理模型（如 deepseek-v4.1-flash）的思考会占 max_tokens ——"
+                    + f"。当前 max_tokens={mt}。\n"
+                      "推理模型（如 deepseek-v4.1-flash）的思考会占 max_tokens ——"
                       "\n把 llm_config.json 的 max_tokens 调大，或把 max_tokens 参数传给 chat()。"
                     + (f"\n思考开头：{r[:200]}" if r else ""))
             return txt
         except LLMError as e:
             last = e
+            # ── 额度被服务端拒收 → **自动折半重试**，不让一整轮生成白死 ──
+            # 2026-09-21：`max_tokens: 1000000` 实测被网关回 HTTP 400
+            # `invalid_request_error`。提示这条不代表模型或密钥有问题，只是额度超了。
+            if ("HTTP 400" in str(e) and mt > 2000
+                    and any(k in str(e) for k in ("max_tokens", "max output",
+                                                  "maximum", "too large", "invalid_request"))):
+                mt //= 2
+                print(f"⚠️  服务端拒收 max_tokens，自动降到 {mt} 重试…")
+                continue
             if i < retries and ("连不上" in str(e) or "HTTP 5" in str(e) or "HTTP 429" in str(e)):
                 time.sleep(2 + 3 * i)
                 continue
@@ -271,12 +285,61 @@ def extract_json(txt: str) -> dict:
     if m:
         t = m.group(1).strip()
     i, j = t.find("{"), t.rfind("}")
-    if i < 0 or j <= i:
-        raise LLMError(f"回复里找不到 JSON 对象：\n{txt[:400]}")
+    if i < 0:
+        raise LLMError(f"回复里找不到 JSON 对象（连 `{{` 都没有）：\n{txt[:400]}")
+    if j <= i:
+        # ⚠️ 这一支**必须说"被截断"这四个字** —— `pipeline._gen_once` 靠关键词判断
+        # 这一轮该不该打回重做。措辞含糊会让截断被当成致命错误，整轮生成白死。
+        raise LLMError(
+            f"回复**被截断了**：找到了 `{{` 却没有配对的 `}}`（收到 {len(t)} 字符）。\n"
+            "推理模型的思考与正文**共用 max_tokens** —— 思考吃光额度，正文就断在半句。\n"
+            f"自查：`python tools/probe_llm.py`　尾部：…{t[-200:]}")
+    body = t[i:j + 1]
     try:
-        return json.loads(t[i:j + 1])
+        return json.loads(body)
     except ValueError as exc:
-        raise LLMError(f"JSON 解析失败：{exc}\n{t[i:i+400]}") from None
+        # 报错必须**说得清是截断还是写坏了** —— 两者的处置完全不同：
+        #   截断 → 调大 max_tokens；写坏 → 让模型重写这一段。
+        # 只回一句 "Expecting ',' delimiter" 会让人以为是模型的语法问题。
+        cut = _looks_truncated(body)
+        raise LLMError(
+            f"JSON 解析失败：{exc}\n"
+            + ("⚠️ **这像是被截断了**（括号不配对 / 结尾停在半句），"
+               "不是模型写坏了语法。\n"
+               "→ 推理模型（如 deepseek-v4.1-flash）的思考与正文共用额度，"
+               "把 llm_config.json 的 max_tokens 调大。\n"
+               if cut else "")
+            + f"出错位置附近：…{body[max(0, exc.pos - 120):exc.pos + 120]}…") from None
+
+
+def _looks_truncated(s: str) -> bool:
+    """粗略判断一段 JSON 是**被截断**还是**真写坏了**。
+
+    判据：括号不配对，或结尾停在一个不像句末的位置（`"key":` / `,` / `:` 之后）。
+    """
+    depth = 0
+    in_str = False
+    esc = False
+    for ch in s:
+        if esc:
+            esc = False
+            continue
+        if ch == "\\":
+            esc = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+    if depth != 0:
+        return True
+    tail = s.rstrip()[-1:]
+    return tail in (",", ":", "[", "{")
 
 
 def cmd_pending() -> int:

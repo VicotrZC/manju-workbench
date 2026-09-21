@@ -77,7 +77,20 @@ H3_SHORT_SIDE = 768   # H3 画布短边
 
 
 class Report:
-    """一份检查结果。**ERROR 才拦提交**，WARN 只提示。"""
+    """一份检查结果。**ERROR 才拦提交**，WARN 只提示，PENDING 是"步骤没走到，轮不到它"。
+
+    ## 为什么要有 PENDING（2026-09-21 加）
+
+    「引用了一个**还没产出**的产物」和「引用了一个**根本不存在**的产物」是两件事：
+
+    - 镜头表必须在出图**之前**就登记首帧文件名 —— 否则没法拿它出图。**先有鸡还是先有蛋。**
+      登记的时候文件当然不在。这不是错误，是**还没轮到**。
+    - 真到了要推 GPU 的那一刻文件还不在 —— **那才是错误**，必须拦死（S8）。
+
+    原来两种都报 ERROR，于是 `S2 分镜` 永远过不去：它引用的首帧是 S6 才出的东西。
+    把「还没做」判成「做错了」，模型会被要求改一个它根本改不了的东西，
+    然后**跑满轮数、白烧额度、最后记一份假失败**。
+    """
 
     def __init__(self, title: str):
         self.title = title
@@ -95,6 +108,10 @@ class Report:
     def info(self, code, msg, **extra):
         self.add("INFO", code, msg, **extra)
 
+    def pending(self, code, msg, **extra):
+        """产物还没产出 —— **不算错**，但要在该拦的时候被提成错（见 `promote_pending`）。"""
+        self.add("PENDING", code, msg, **extra)
+
     @property
     def errors(self) -> list[dict]:
         return [i for i in self.items if i["level"] == "ERROR"]
@@ -102,6 +119,21 @@ class Report:
     @property
     def warns(self) -> list[dict]:
         return [i for i in self.items if i["level"] == "WARN"]
+
+    @property
+    def pendings(self) -> list[dict]:
+        return [i for i in self.items if i["level"] == "PENDING"]
+
+    def promote_pending(self, why: str = "") -> int:
+        """把 PENDING 提成 ERROR。**在"必须要它在"的那一关调用**（S8 推 GPU 之前）。"""
+        n = 0
+        for it in self.items:
+            if it["level"] == "PENDING":
+                it["level"] = "ERROR"
+                if why:
+                    it["msg"] = f"{it['msg']}（{why}）"
+                n += 1
+        return n
 
     def ok(self) -> bool:
         return not self.errors
@@ -264,8 +296,17 @@ def on_screen(prompt: str, c: dict) -> bool:
     return any(k and str(k).lower() in low for k in keys)
 
 
-def load_shot_table(proj: Path, rules: dict) -> tuple[dict, Report]:
+def load_shot_table(proj: Path, rules: dict,
+                    materials: str = "error") -> tuple[dict, Report]:
+    """读镜头表并核它登记的产物在不在。
+
+    `materials`：见 `check_chain` —— `"pending"` 时「产物还没出」记 PENDING 不记 ERROR。
+    """
     rep = Report("分镜表（镜头表 JSON）")
+
+    def _missing(code: str, msg: str, **extra):
+        (rep.pending if materials == "pending" else rep.error)(code, msg, **extra)
+
     rel = rules.get("shot_table", "storyboard/镜头表.json")
     f = proj / rel
     if not f.exists():
@@ -297,20 +338,26 @@ def load_shot_table(proj: Path, rules: dict) -> tuple[dict, Report]:
                 drift = sorted(p.name for p in (proj / "outputs").glob(f"*{sid}*")
                                if p.is_file() and p.suffix.lower() in
                                (".png", ".jpg", ".jpeg", ".webp"))
-                rep.error("SHOT-02", f"镜头 {sid} 的首帧文件找不到：{ff}",
-                          searched=[str(c.relative_to(proj)) for c in cand],
-                          likely_real=[str((proj / 'outputs' / d).relative_to(proj))
-                                       for d in drift[:8]] or "outputs/ 下也没有带本镜号的产物",
-                          fix="首帧是资产，必须归档进 assets/ 或 outputs/；"
-                              "否则这一镜不可复现，也无法事后审计")
+                fw = s.get("first_frame_workflow")
+                _missing(
+                    "SHOT-02",
+                    f"镜头 {sid} 的首帧还没出：{ff}"
+                    + (f"（将由 {fw} 出图）" if fw else ""),
+                    searched=[str(c.relative_to(proj)) for c in cand],
+                    likely_real=[str((proj / 'outputs' / d).relative_to(proj))
+                                 for d in drift[:8]] or None,
+                    fix=(f"出首帧：`pipeline.py gen {proj.name} S6` 会写 "
+                         f"workflows/{fw}.json，再 `run.py` 推云机出图"
+                         if fw else "镜头表里登记 `first_frame_workflow`，再出图"))
         wfn = s.get("workflow")
         if wfn:
             wf_file = proj / "workflows" / f"{wfn}.json"
             if not wf_file.exists():
-                rep.error("SHOT-04",
-                          f"镜头 {sid} 的工作流文件不存在：workflows/{wfn}.json",
-                          fix="**一个镜头一条工作流，不许反复改写同一个文件** —— "
-                              "被覆盖掉的那一镜的提示词就永远无法审计、无法复现了")
+                _missing("SHOT-04",
+                         f"镜头 {sid} 的工作流还没写：workflows/{wfn}.json",
+                         fix=f"`pipeline.py gen {proj.name} S6` 会按镜头表逐镜生成；"
+                             f"**一个镜头一条工作流，不许反复改写同一个文件** —— "
+                             f"被覆盖掉的那一镜的提示词就永远无法审计、无法复现了")
     return tbl, rep
 
 
@@ -412,8 +459,34 @@ def h3_nodes(wf: dict) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════════
 #  第一道：层链 + 节拍覆盖
 # ══════════════════════════════════════════════════════════════════════
-def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
+def check_chain(proj: Path, rules: dict, materials: str = "error") -> tuple[Report, dict]:
+    """层链与节拍覆盖。
+
+    `materials`：**引用了一个还没产出的产物，算什么？**
+
+    | 值 | 用在哪 | 「首帧还没出」 | 「工作流还没写」 |
+    |---|---|---|---|
+    | `"pending"` | **S2 分镜 / S3 验分镜** —— 两者都排在生产步骤前面 | PENDING | PENDING |
+    | `"error"`   | **S6 写完 / S8 推 GPU 之前** —— 此刻不在就是真错 | ERROR | ERROR |
+
+    **为什么必须分档（2026-09-21 实测教训）**：
+
+    这条链查的三样东西 —— 首帧图、镜头工作流、首帧工作流 —— **全是 S6 才产出的**，
+    而 S2（分镜）和 S3（验分镜）都排在 S6 **前面**，两者都不产出这些文件。
+    原判据一律报 ERROR，于是：
+
+    - **S2 永远过不去** → 模型跑满 3 轮、白烧额度、最后记一份**假失败**；
+    - **S3 永远过不去** → 而 S3 是 S4 的依赖 → **整条线在第一步就死锁**。
+
+    判据错位比漏检更坏：它不让任何东西通过，却让人以为"是模型不行"。
+    真到了要推 GPU 那一刻文件还不在，**S8 会把它提成 ERROR 拦死** —— 防线没有丢。
+    """
     rep = Report(f"层链与节拍覆盖 · {proj.name}")
+
+    def _missing(code: str, msg: str, **extra):
+        """产物不在：按 materials 决定报 PENDING 还是 ERROR。"""
+        (rep.pending if materials == "pending" else rep.error)(code, msg, **extra)
+
     rel_script = rules.get("script")
     if not rel_script or not (proj / rel_script).exists():
         rep.error("CHAIN-01", f"剧本层文件缺失：{rel_script}", fix="先出戏，再出分镜")
@@ -435,7 +508,7 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
                           fix="未拍板的锁不能当闸门判据：要么让用户在项目卡里逐字确认它，"
                               "要么把它从 audit_rules.json 删掉")
 
-    tbl, srep = load_shot_table(proj, rules)
+    tbl, srep = load_shot_table(proj, rules, materials=materials)
     rep.items.extend(srep.items)
     shots = tbl.get("shots") or []
 
@@ -469,7 +542,9 @@ def check_chain(proj: Path, rules: dict) -> tuple[Report, dict]:
             continue
         _ff_owner.setdefault(fw, []).append(s.get("id"))
         if not (proj / "workflows" / f"{fw}.json").exists():
-            rep.error("SHOT-05", f"镜头 {s.get('id')} 的首帧工作流不存在：{fw}")
+            _missing("SHOT-05", f"镜头 {s.get('id')} 的首帧工作流还没写：{fw}",
+                     fix=f"`pipeline.py gen {proj.name} S6` 会写它；"
+                         f"首帧是哪条工作流出的一定要写下来，否则画风无从追溯")
             continue
         if fw in _style_checked:          # 四镜同源时只报一次，不刷屏
             continue
