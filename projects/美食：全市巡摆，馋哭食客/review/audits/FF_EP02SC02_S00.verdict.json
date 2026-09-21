@@ -2,23 +2,39 @@
   "subject": "FF_EP02SC02_S00",
   "auditor": "model",
   "verdict": "pass",
-  "summary": "首帧该管的四件都进了：画风句在描述段第 0 字、占比 23.8%（≥20% 下限），取景句与上游 framing_en 逐字一致（压缩未丢任何分句，两人站位/朝位/景别机位齐全），CHR-01 签名标记英文原文与「无围裙、无湿手、无屠宰血迹」「单人骑车、后座空着」正向否定锁都在，末行声明了无字画面。唯一实质缺口在上游：_framing_note 声称把「画面里正好两个人／闫清是唯一靠近镜头的／环卫工人体型远小于闫清」写进了正向，但 framing_en 原文里这三条并不存在，提示词只是忠实照搬，故记为对上游的意见而非本提示词缺陷。",
+  "summary": "这是 S00 的 t2i 首帧工作流，逐条核过：取景分句与构图信息齐全（wide shot/eye level/pre-dawn、闫清在左朝右、alone、empty saddle、最右远处背对镜头的环卫工人），与上游 framing_en 逐字一致、一条分句没丢；画风句在描述段第 0 字，占比 20.4%（≥20% 下限）；身份锚英文原文在正向里；否定枚举（无围裙/无湿手/无屠宰血迹）与「画面无字」均已声明。只有一条对上游的意见（环卫工人的长扫帚只剩动词、名词被收紧时吞掉）与两条提示，不构成 blocking。VO／帧数／防跳轴／GEO 英文块按定义不属本工作流，未计入 findings。",
   "findings": [
     {
       "id": "F1",
-      "level": "warn",
+      "level": "info",
       "code": null,
-      "claim": "上游 _framing_note 承诺的防重复加固没有落到 framing_en 原文里，提示词照搬后同样缺这三条，本镜首发失败模式（把闫清画成两个人）只被部分堵住。",
-      "evidence": "_framing_note 自述：「现在正向写死『画面里正好两个人／闫清是唯一靠近镜头的／环卫工人背对镜头且体型远小于闫清／穿反光背心』」。而 shot.framing_en（= 提示词第 2 段原文）实际只有：『A static wide shot at eye level on the pre-dawn street; Yan Qing rides his small e-bike alone on the left, the empty saddle behind him, heading toward the market; far off on the right edge a street sweeper walks away in a hi-vis vest.』。可对上的是「hi-vis vest」＝穿反光背心、「walks away」≈背对镜头、「far off on the right edge」＝远处；缺的是「正好两个人」「闫清是唯一靠近镜头的」「体型远小于闫清」。提示词里确实写了「单人骑车、后座空着」与 alone，挡住了后座搭人，但没有定量人数，也没有把环卫工人与闫清的体型/主次拉开，中文段落的角色卡式描述（闫清＋疤痕）仍有被模型当成独立前景人像渲染的余地。",
-      "fix": "在上游 framing_en 里补回缺失的三条（例：exactly two people in frame; Yan Qing is the only figure near camera; the sweeper is far smaller than Yan Qing），再让 framing_t2i 走压缩。预算可容纳：现 421 字 + 约 40 字 ＝ 约 461 字，仍低于画风句 100 字 ÷ 20% ＝ 500 字上限，占比约 21.7% 仍过 WF-04。"
+      "claim": "环卫工人的「长扫帚」在本镜只剩动词 sweeping，名词没有了 —— 上一轮为拉开他与骑车人的轮廓而加的 `pushing a long broom` 在字数收紧时被吞掉。24mm 全景里他只剩「反光背心＋背对镜头」，而与骑车人混同/合并是这个镜头已实测过的失败模式。提示词本身与上游同源，故记为对上游（framing_en）的意见。",
+      "evidence": "prompt 第二段 = framing_en 原文：`far right, a sweeper in a hi-vis vest, back to the lens, sweeping in place.`（无 broom/扫帚名词）；镜头 content：「画面最右远处一个穿反光背心的环卫工人**背对镜头、原地挥长扫帚**」；`_framing_note` ⑤「**加 `pushing a long broom`**…给这个人物一个与骑车人截然不同的轮廓」；⑥ 只保留了 `sweeping in place`。",
+      "fix": "改在 framing_en 里做等长替换（如 `sweeping in place` → `pushing a long broom, in place`），t2i 侧同步镜像；因画风占比余量只有 0.4 个百分点（见 F2），加字必须等量删字，且不得新增分句。"
     },
     {
       "id": "F2",
       "level": "info",
-      "code": "SHOT-05",
-      "claim": "层链里 SHOT-05 的文案与它自己的数值自相矛盾，属工具提示串错误，不影响本镜判定。",
-      "evidence": "chain.items[SHOT-05]：『首帧画风句占比不过（镜头表登记的首帧出自 FF_EP02SC02_S00）：[WF-04] 画风句占比 23.8%（下限 20%）』—— 23.8% ≥ 20% 是过闸，措辞「不过」为误；同一审计包 mechanical 亦为 ok:true、errors 为空。",
-      "fix": "修 tools/ 里 SHOT-05 的模板串，改为按 ok/fail 分支输出（此处应为「画风句占比达标」）。"
+      "code": "WF-04",
+      "claim": "画风句在第 0 字、占比 20.4%，过线，但余量仅 0.4 个百分点：总长 491 字已达 500 字上限的 98%，任何加字都会把占比击穿 20% 下限。",
+      "evidence": "prompt 首段画风句 100 字 ÷ 总长 491 字 = 20.37%；mechanical WF-04「画风句占比 20.4%（下限 20%）」；`_framing_note` ⑦⑧记录本句正是为达标两次收紧（19.8% → 20.4%）。",
+      "fix": "无（当前达标）。后续任何补字（含 F1）须等量删除他处，保持总长 ≤ 500 字。"
+    },
+    {
+      "id": "F3",
+      "level": "info",
+      "code": null,
+      "claim": "身份锚英文原文在正向里，且已按 `signature_visible: false` 补了「不可见」说明，与「不得为露疤而改机位/景别/转头」一致，不是缺陷；但它混排在中文行内，24mm 全景下模型仍有为露出疤而略推近的残余风险。",
+      "evidence": "prompt：「…无屠宰血迹，a small old scar just above the outer end of his left eyebrow（too small to read at this distance — do not zoom in）」；`_signature_note`：本镜 24mm 全景、面部朝行进方向不朝镜头，疤属近景才可辨的尺度，要求「写明它在本镜镜外，并说清不要为了露出它而改机位／景别／转头」。",
+      "fix": "无（已按上游字段处理）。若首帧实测出现面部推近/脸颊特写，再把括注改写为更明确的「在本镜镜外（off-frame）」。"
+    },
+    {
+      "id": "F4",
+      "level": "info",
+      "code": null,
+      "claim": "取景分句与构图信息齐全，无丢句：机位/景别、两人的位置与朝向、屏幕方向锁、后座空锁、环卫工人朝向与动作全在；「画面无字」已声明；道具与场景条目齐。",
+      "evidence": "t2i 第二段与上游 framing_en 逐字一致：`Static wide shot, eye level, pre-dawn street; Yan Qing alone on the left, riding frame-right toward the market, empty saddle behind him; far right, a sweeper in a hi-vis vest, back to the lens, sweeping in place.`；尾段「画面里是干净的无字画面。」；「道具：小电驴（闫清代步电动车）」「场景：…东西向城市街道…凌晨四点」对应 PRP-02 / SCN-02。",
+      "fix": "无。"
     }
   ],
   "blocking": [],

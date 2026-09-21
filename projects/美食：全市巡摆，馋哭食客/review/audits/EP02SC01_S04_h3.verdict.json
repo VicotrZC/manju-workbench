@@ -1,0 +1,78 @@
+{
+  "subject": "EP02SC01_S04_h3",
+  "auditor": "model",
+  "verdict": "fail",
+  "summary": "硬性格式项全部核过：画风句位于 detailed_description 第 0 字、GEO 英文块与 geo_block 逐字一致、取景句紧跟在 [Shot 1] 之后、禁字幕句在、帧数 175＝17×10+5 且与镜头表登记一致、画布 1376×768、防跳轴句在、turbo 4step LoRA 与 4 步采样成对、三句台词逐字落在 <d>[Chinese] …</d> 且语音密度 21 字/7.29 s≈2.9 字/秒 不超 5.5。但内容层有两处硬矛盾：retention_analysis 把摊主写成『appears in [Shot 2]』而本工作流只有 [Shot 1]；以及『锁定中景、景别不得改变』与『骑车向纵深远去、身影越来越小、直到市场口停下』在走位、景别和市场口方位上互相冲突。另有结尾逆光剪影与 GEO 唯一光源/禁轮廓光冲突、摊主第二句误标 (S3)、上游要求的『笑得合不拢嘴』未进提示词等次级问题。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "error",
+      "code": null,
+      "claim": "retention_analysis 把 <Subject 2>（摊主）登记为『appears in [Shot 2]』，但本工作流只有一个镜头 [Shot 1]，同一份提示词的 subject_definitions 也写明 The butcher 在 [Shot 1] 全程在场。保留分析自相矛盾，可能让 H3 以为存在第二个镜头，或把摊主的 fully_preserved 约束挂到不存在的镜次上而失效。",
+      "evidence": "retention_analysis: '<Subject 2> (appears in [Shot 2]): fully_preserved — the butcher keeps his face, build and apron, stays on his locked EAST / frame-right side…'，而对 <Subject 1> 写的是 '(appears in [Shot 1])'；subject_definitions: '<Subject 2> is 摊主… In [Shot 1] The butcher stays in the right half of the frame throughout.'；workflow_facts.frames = 175（单镜 7.29 s）。",
+      "fix": "把 retention_analysis 中 <Subject 2> 的镜次改成 [Shot 1]：'<Subject 2> (appears in [Shot 1]): fully_preserved — …'。"
+    },
+    {
+      "id": "F2",
+      "level": "error",
+      "code": null,
+      "claim": "『静态中景 + <Picture 1> 锁定景别不得改变』与『闫清骑车远离相机、沿画面左侧向纵深远去、身影越来越小、6.6 s 后停死在市场口』在景别与走位上不能同时成立；且走位方向与 GEO 坐标冲突：相机朝北看摊位时『远离相机』= +y 会直接撞上 y 0~0.8 的柜台，而『沿画面左侧』是 x 负方向（西），两者不能同时满足；取景句又说天光/市场口在闫清『身后』（画面外、相机后方），与『市场口在过道远端』矛盾。",
+      "evidence": "<Picture 1> '…The shot scale is already final in <Picture 1> and must not change.'；'[Shot 1] A static medium shot at eye level from the market aisle…'；5.4-6.6s 'Yan Qing rides straight away from the camera into the depth of the aisle along the left side of the frame… his figure receding and growing smaller'；6.6-7.29s 'Yan Qing comes to a stop at the far end of the aisle at the market mouth'；GEO 'Counter: … y 0 to +0.8'、'Yan Qing (C01): SOUTH of the counter, x −0.6, y −0.9, FACING NORTH (+y)'、'Aisle: y < 0, about 3.5 m wide. A row of other stalls stands opposite, y −4.5 to −3.6'；取景句 '…dawn light paling at the market mouth behind him.'；镜头表 dist_m 3.5 / visible_w_m 3.6 的中景装不下『远去变小直到市场口』。",
+      "fix": "二选一并保持坐标自洽：(a) 把 5.4-7.29s 改成中景内可完成的动作（起步、按画面左侧离画，不做纵深远去，不出现变小与市场口）；或 (b) 由上游先定死『市场口』在坐标中的方位与朝向，再把『远离相机』的走位方向、市场口与相机的关系（前/后）以及『景别不变』三者改到互相一致——若市场口按取景句在闫清身后（相机后方），则他不能『远离相机』去到达它。"
+    },
+    {
+      "id": "F3",
+      "level": "warn",
+      "code": null,
+      "claim": "结尾『闫清的剪影顶在泛白天光上』要求逆光/轮廓光，与 GEO『五盏红灯是本摊唯一光源、过道冷光是低强度微光、禁止无动机光与轮廓光』冲突；照此执行会出现本镜不该有的背光光源，或不出现剪影效果。",
+      "evidence": "'6.6-7.29s … his silhouette held against the paling dawn' 与 GEO 'the five red pendant lamps … are the stall's ONLY light source; the aisle behind Yan Qing adds a faint cool spill (about 5000 K) at much lower intensity … No unmotivated light, no rim light, no lens flare.'",
+      "fix": "去掉 'silhouette/held against the paling dawn' 的逆光表述，改为『市场口方向的天光只做背景整体亮度抬升，人物不被轮廓光勾勒、面部仍由红灯主光保证可读』；或由上游在 GEO 里补一条动机光（市场口天光）后再改提示词。"
+    },
+    {
+      "id": "F4",
+      "level": "warn",
+      "code": null,
+      "claim": "摊主的第二句台词与第二句同一说话人（<Subject 2>）却标成 (S3)；本镜 <Subject 3> 是道具『五十斤猪肉』，标签 (S3) 与 Subject 3 撞号，可能被 H3 读成第三个说话人（出现第三个声音/第三个角色）。",
+      "evidence": "'<Subject 2> (S2) says, <d>[Chinese] 好嘞。</d> <Subject 2> (S3) says, <d>[Chinese] 小伙子，以后多光顾啊！</d>'；'<Subject 3> is 五十斤猪肉（老板装好的那块黑猪肉）.'",
+      "fix": "第三句改为 '<Subject 2> (S2) says, <d>[Chinese] 小伙子，以后多光顾啊！</d>'，说话人编号与 Subject 编号对齐。"
+    },
+    {
+      "id": "F5",
+      "level": "info",
+      "code": null,
+      "claim": "三句台词没有分配时点，且时间轴 0.0s 起手已是『包肉收尾』，第 1 句点单台词在画面里没有对应的动作前提（点单-装肉的交易前段缺失），口型/表演落点不明确。",
+      "evidence": "timeline '0.0-1.5s On frame right the butcher (Subject 2) finishes wrapping the single fifty-jin pork parcel in paper…' 与台词 '<d>[Chinese] 老板，给我来五十斤猪肉。</d>'；镜头表 content '闫清要五十斤猪肉，摊主…装肉'。",
+      "fix": "若上游要求点单入镜，把时间轴前段改成『闫清点单 → 摊主起手包肉』并给三句台词标注落点（如 0.3-1.6s / 1.7-2.4s / 4.4-5.4s）；否则在台词块注明三句为落在 0.0-2.8s 的后置对白，画面不再补点单动作。"
+    },
+    {
+      "id": "F6",
+      "level": "info",
+      "code": null,
+      "claim": "对上游的意见：『小电驴』是本镜的核心道具（闫清把肉驮上后架、骑走），但镜头表登记的资产里没有对应条目，提示词只能靠文字描述让模型凭空生成车型，跨镜一致性无保障。",
+      "evidence": "shot.assets = [\"CHR-01\",\"CHR-02\",\"PRP-02\",\"SCN-01\"]；shot.content '闫清把小电驴驮满骑出市场'；提示词 'sets the parcel down on the rear rack of the e-bike'、'mounts the e-bike and rides away'。",
+      "fix": "上游补充电瓶车道具资产（编号 + 参考图）并写进 assets，再在提示词中按资产名引用。"
+    },
+    {
+      "id": "F7",
+      "level": "warn",
+      "code": null,
+      "claim": "上游镜头表 content 要求的『摊主笑得合不拢嘴』没有进提示词，摊主全程只有包肉、擦手、举手挥别，缺了本镜要的面部表演。",
+      "evidence": "shot.content '摊主笑得合不拢嘴、手脚麻利地装肉并喊小伙子以后多光顾'；提示词摊主的动作只有 'finishes wrapping the single fifty-jin pork parcel in paper, folding the ends down with both hands'、'wipes his hands on his apron'、'lifts one hand in a wave'。",
+      "fix": "在 0.0-1.5s 与 4.2-5.4s 给摊主补上『咧嘴大笑/笑得合不拢嘴』的表情描述（并注意与本场固定化妆造一致）。"
+    },
+    {
+      "id": "F8",
+      "level": "info",
+      "code": null,
+      "claim": "硬性格式与机械项逐条复核通过，无需修改。",
+      "evidence": "画风句 '国产三维动画剧集风格：赛璐璐平涂着色叠加体积光…' 位于 detailed_description 第 0 字；GEOSPATIAL LOCK 段与 geo_block 逐字一致（WF-05）；取景句与镜头表 framing_en 逐字一致并紧跟 detailed_description 的 [Shot 1]（首个 [Shot 1] 标记后的 ~0 字，在该段前 400 字内）；'No subtitles, captions or on-screen text appear at any point.' 在；frames 175 = 17×10+5，与 shot.frames 175、workflow_facts.frames 175 一致，175/24 = 7.29 s 与 duration_s 一致；canvas 1376×768；防跳轴句 'THE CAMERA STAYS ON SIDE A AT ALL TIMES AND NEVER CROSSES THE AXIS.' 在；LoRA minimax_h3_ref2v_turbo_4step_v0.1 (strength 1.0) 与 BasicScheduler simple/4 步/sampler 成对；三句台词逐字落在 <d>[Chinese] …</d>（点单、好嘞、多光顾），共 21 汉字，7.29 s×5.5 = 40 字容量，密度 2.9 字/秒不超。",
+      "fix": "无需修改。"
+    }
+  ],
+  "blocking": [
+    "F1",
+    "F2"
+  ],
+  "waivers": [],
+  "_ask": "tools/s7_verdict.py"
+}

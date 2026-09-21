@@ -24,20 +24,19 @@ GEO SPATIAL LAYOUT（全镜头锁定，纯空间地图）：
 — 人行道 = 南北各一条，各宽 2.50m：北侧 y +3.5…+6.0，南侧 y −3.5…−6.0
 — 路缘石 = 南北各一道，高 0.15m，在 y = ±3.5
 — 小区大门 = 南侧，铁艺门，在 x −1.2…+1.2，y −6.0…−6.6；门内是小区院内（本场不出现在画面里）
-— 停车棚 = 南侧人行道上，轻钢棚，x −2.0…+1.0，y −4.0…−5.5，棚内停一排小电驴
+— 停车棚 = 南侧人行道上，轻钢棚，x −2.0…+1.0，y −4.0…−5.5，棚内停一排小电驴（**在画面近前景左下方**；骑行者从棚**外侧**经过，不穿棚）
 — 路灯 = **北侧一道**，臂式，间距 12.00m，杆位 x = −24 / −12 / 0 / +12 / +24，y = +3.6，灯头离地 6.00m
    **南侧没有路灯。** 全场光源只有北侧这一列
 — 行道树 = 北侧人行道，间距 12.00m，与路灯交错（x = −18 / −6 / +6 / +18），树干直径 0.25m
-— 环卫工人 = 北侧人行道，x +6.0，y +4.6，**面朝西**，推一辆手推垃圾车
+— 环卫工人 = 北侧人行道，x +6.0，y +4.6，**面朝北（＝背对镜头，相机朝北只能看到背面）**，**原地**挥扫帚（长杆＋扫地头）；**不沿街行进** —— 一走就两秒内出画右，与「整镜都在远处」冲突
 — 闫清（C01）：**骑小电驴**，起于小区大门内侧 x −0.6，y −5.6，**向东（+x）行进**；
-   行进路线沿南侧人行道外缘，y ≈ −4.2，**全镜只向东走，不回头**
+   行进路线在南侧人行道**外缘的棚外一侧**，y ≈ −3.9（**必须在车棚占地 x −2.0…+1.0, y −4.0…−5.5 之外**，否则会拍成「人穿棚而过」）；**全镜只向东走，不回头**；**双手扶把**
 — 小电驴 = 踏板式两轮电动车，车身长约 1.70m；车头小灯是唯一随人移动的光
-— 手机 = 闫清右手握持，屏幕亮，屏幕光向上打到他的脸与胸前
+— **本场画面里没有手机**（用户 2026-09-21 拍板去掉前景手机）。
 — 环境亮度 = 极暗。天空无月无星，天光几乎为零
 — 名义光 = **北侧那一列路灯**（色温约 4000K，冷白，光轴垂直向下略偏向北）；
-   补光 = 手机屏幕（冷白偏高色温，只照到闫清一个人）
-— 全场阴影统一落向正下方并略偏向南（路灯在北），软阴影、无硬边投影；
-   只有手机屏照亮的那一块是硬一点的近场光
+   补光 = 无（**手机已从画面里去掉**，见下）
+— 全场阴影统一落向正下方并略偏向南（路灯在北），软阴影、无硬边投影
 — **东边天光**：本镜收尾时东侧天际线开始极弱地泛白（承接 SCN-01 的收在天亮）
 ```
 
@@ -65,15 +64,15 @@ GEOSPATIAL LOCK (identical in every shot of this scene):
 — Bicycle shelter: on the SOUTH pavement, light steel canopy, x −2.0 to +1.0, y −4.0 to −5.5, with one row of small electric scooters parked under it.
 — Street lamps: ONE row only, on the NORTH side, with cantilever arms, 12.00 m apart, poles at x = −24, −12, 0, +12, +24, y = +3.6, lamp heads 6.00 m above the ground. THERE ARE NO LAMPS ON THE SOUTH SIDE. This one row is the only light source on the street.
 — Street trees: on the NORTH pavement, 12.00 m apart, alternating with the lamps (x = −18, −6, +6, +18), trunks 0.25 m in diameter.
-— The street sweeper: on the NORTH pavement, x +6.0, y +4.6, FACING WEST, pushing one hand cart.
-— Yan Qing (C01): RIDING a small electric scooter. He starts just inside the compound gate at x −0.6, y −5.6, and TRAVELS EASTWARD (+x) along the outer edge of the SOUTH pavement at about y −4.2. He only ever moves east and never turns back.
+— The street sweeper: on the NORTH pavement at x +6.0, y +4.6, FACING NORTH (away from the lens, so the camera sees his back), **standing in place** and sweeping with one long broom. He does NOT travel along the street and he never faces the lens: if he walked, he would leave the right edge of the frame within two seconds, which would contradict the framing (he stays small and far off for the whole shot).
+— Yan Qing (C01): RIDING a small electric scooter, BOTH HANDS ON THE HANDLEBARS. He starts just inside the compound gate at x −0.6, y −5.6, and TRAVELS EASTWARD (+x) at about y −3.9, which is OUTSIDE the bicycle-shelter footprint (x −2.0 to +1.0, y −4.0 to −5.5) so that he never passes under the canopy. He only ever moves east and never turns back.
 — The scooter: a step-through two-wheel electric scooter about 1.70 m long; its small headlight is the only light that moves with him.
-— The phone: held in Yan Qing's right hand, screen lit, throwing its light upward onto his face and chest.
+— NO PHONE APPEARS ANYWHERE IN THIS SCENE (decided 2026-09-21: the lit phone screen was removed from the frame; the 04:00 alarm is carried by the voice-over, not by the picture).
 — Ambient level: very dark. No moon, no stars, essentially no skylight.
-— Motivated light: the single row of street lamps on the NORTH side (about 4000 K, cool white, axis straight down and very slightly north) is the ONLY light source, plus the phone screen (cool, slightly higher colour temperature, reaching Yan Qing alone).
-— Shadows: every shadow falls almost straight down and slightly SOUTH, because the lamps are north of the road. Soft-edged and low in contrast. Only the patch lit by the phone screen has a harder near-field falloff.
+— Motivated light: the single row of street lamps on the NORTH side (about 4000 K, cool white, axis straight down and very slightly north) is the ONLY light source.
+— Shadows: every shadow falls almost straight down and slightly SOUTH, because the lamps are north of the road. Soft-edged and low in contrast.
 — Sky: the eastern skyline is very faintly paling at the end of this shot, carrying the dawn that SCN-01 finishes on.
-— Screen direction rule: the compound gate and the bicycle shelter stay on the SOUTH (frame left, away from the camera) side and the street lamps and the street sweeper stay on the NORTH (frame right, toward the camera) side, IN EVERY SHOT. Yan Qing travels only toward the EAST, which is frame right. No second rider, no pedestrian, and no vehicle ever enters the frame, and no figure is ever duplicated.
+— Screen direction rule: the camera faces NORTH throughout, so on screen **EAST is frame right and WEST is frame left**, and the SOUTH side (the compound gate and the bicycle shelter) lies in the NEAR FOREGROUND while the NORTH side (the street lamps, the street trees and the street sweeper) lies BEYOND the road, farther from the lens. The sweeper and the lamp row therefore read as frame right and farther away; the gate and the shelter read as frame left and nearer. Yan Qing travels only toward the EAST, which is frame right. No second rider, no pedestrian, and no vehicle ever enters the frame, and no figure is ever duplicated.
 ```
 
 ---
@@ -82,7 +81,7 @@ GEOSPATIAL LOCK (identical in every shot of this scene):
 
 | 镜 | 戏在哪里（节拍） | 闫清 站在哪／看向哪 | 环卫工人 | 机位 | 帧数 |
 |---|---|---|---|---|---|
-| **S00** | B1｜四点，空街 | 骑小电驴，自小区大门 x −0.6, y −5.6 向东行进至 y ≈ −4.2，看前方（+x） | x +6.0, y +4.6，面朝西，背对行进方向 | CAM0：x −0.15, y −3.2，朝北（与 SCN-01 的 CAM1 同位同向），24mm，距 4.0m，可见宽 6.00m | 175 |
+| **S00** | B1｜四点，空街 | 骑小电驴，自小区大门 x −0.6, y −5.6 向东行进至 y ≈ −3.9（棚外），看前方（+x） | x +6.0, y +4.6，**面朝北、背对镜头，原地不动** | CAM0：x −0.15, y −3.2，朝北（与 SCN-01 的 CAM1 同位同向），24mm，距 4.0m，可见宽 6.00m | **192** |
 
 **帧数**落在 H3 的 `17k+5` 网格上（175 = 17×10+5）。
 
@@ -90,9 +89,10 @@ GEOSPATIAL LOCK (identical in every shot of this scene):
 > 这是有意的：**两场要能接得上**。区别只在焦段（24mm 全景 vs 35mm 中景）
 > 与场地（街心 vs 摊前）。
 >
-> ⚠️ **7.29 秒要装两个画面**（手机闹钟 04:00 ＋ 骑小电驴出门）。
-> 用户 2026-09-21 定「就一个镜头，出首帧我看」—— **看过首帧再判断装不装得下**，
-> 装不下就拆镜或加长（加长到 192 帧仍在网格上）。
+> ⚠️ **已定：192 帧（8.00s），一镜到底。** 用户 2026-09-21 拍板「加到 192 帧」——
+> 原因是容量：41 字 VO @5.5 字/秒 需 7.45s，175 帧只有 7.29s **装不下**。
+> 画面内容也已定：**只拍街＋骑车人**（用户拍板去掉前景手机），
+> 时间 04:00 由 VO 报，不由画面承担。
 
 ---
 

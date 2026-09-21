@@ -1,0 +1,47 @@
+{
+  "subject": "EP02SC02_S00_h3",
+  "auditor": "model",
+  "verdict": "pass",
+  "summary": "逐条复核通过：B1 的两句 VO 原文（含破折号）全部落入 <d>[Chinese] …</d> 并标注 (S1)/(S2)，GEO 英文块与上游 geo_block 逐字一致，画风句位于 detailed_description 第 0 字，取景句紧跟 [Shot 1] 且与镜头表 framing_en 一字不差，禁字幕句在，192 帧＝17×11+5 与登记值一致，画布 1376×768，防跳轴/朝向句齐备，LoRA（turbo_4step）与 4 步采样档位成对。机械 ERROR 为空；两条 WARN 中 WF-09 系误报（提示词已在 overall_soundscape 与 summary 显式声明无人说话），WF-20 属实但按 5.5 汉字/秒口径 41 字 / 8.00s 仍装得下，不构成阻塞。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "warn",
+      "code": "WF-20",
+      "claim": "本镜语音密度偏紧：两句 VO 共 41 字要压在 8.00 秒内，密度 5.13 汉字/秒＝该镜容量的 93%，超过戏 §三自定的 75% 舒适上限。",
+      "evidence": "beats_owned.B1.vo 两句合计 41 汉字；shot.duration_s=8.0；41/8.0=5.13 汉字/秒 ≤ 5.5 口径上限，故装得下，但 41/L(8s×5.5=44)=93%。且 overall_soundscape 写 'leaving a clear pocket of space for them so they read easily over the street'，与 93% 占用相冲。",
+      "fix": "非阻塞。若要留出气口：把本镜时长加到 9.0s（并同步改帧数 17×12+5=209 与分镜表登记值），或将两句 VO 的间隔交给下一镜/上一镜分担；不改时长也应知道配音几乎没有停顿余量，混音时不要再压推进器/扫帚声之上的留白。"
+    },
+    {
+      "id": "F2",
+      "level": "info",
+      "code": null,
+      "claim": "构图歧义风险（对上游 GEO 的意见，非提示词缺陷）：GEO 在南侧近景自行车棚下写了 'one row of small electric scooters parked under it'，而主角骑的正是同类小电驴，24mm 全景里近景一排电动车＋中景骑行人是本项目已记录过的『模型把两人合成一个/多画一个人』高发配置。",
+      "evidence": "GEO 原文：'Bicycle shelter: on the SOUTH pavement … with one row of small electric scooters parked under it'；同块 'Yan Qing (C01): RIDING a small electric scooter'；shot._framing_note ① ② 记载第 1、2 版首帧均因并列人物被合成为『多出一个人/多一个乘客』。提示词已按现行文本写死 alone / empty saddle / far right / no figure is ever duplicated 并逐字复述 GEO，未增未删。",
+      "fix": "提示词侧无需改（GEO 为逐字锁定块）。若下一轮首帧仍出现多车/多人，请在 GEO 层把该停车棚的电动车改为明确不读作骑乘者的措辞（如行数与朝向写死、或移出可见范围），并同步改 GEO 与 shot 两处。"
+    }
+  ],
+  "blocking": [],
+  "waivers": [
+    {
+      "code": "WF-09",
+      "reason": "机械判『未显式声明无人说话』属误报：提示词 summary 段写有 'No one speaks in the scene'，overall_soundscape 段写有 'No voices, no dialogue and no speech of any kind.'，两处均为显式无对白声明，漂人声风险已被覆盖。"
+    }
+  ],
+  "_ask": "tools/s7_verdict.py",
+  "subjects": {
+    "workflows\\EP02SC02_S00_h3.json": "00b5f03e187dd76ed64c72426a49d3d3c10796d4dfdfa7f242b3bc66fe14eb9c",
+    "script/EP02_SC02_凌晨空街_戏.md": "61aff0e2d6e83d44821f22a9f92ef50a3c5b719b858b98ddfac67f5295a62632",
+    "storyboard/SCN02_镜头表.json": "483b55b40a7b5d75f01a8285dfecf830c192b09b05feff11d76d520f190ec62f",
+    "storyboard/SCN02_GEO空间地图.md": "8f17bccd52e57d92ee813d59871064e6183a763a34d595ae0b16b9d470bae162",
+    "audit_rules.json": "0f180e5da7de96f794650e31c81afd52e80a173f1987fe0711393f16752208f7",
+    "workflows/FF_EP02SC02_S00.json": "2a3bc00fe5e58aa657b1d0ad143807e4051783f0b56f124a3495ff60a9fbb7c0",
+    "prompts\\S00.prompt.md": "43bbde52b9c91bfa09be322f7f5b77633acb2d07dc5672463af290a2bab55b0a"
+  },
+  "sealed_at": "2026-09-21T18:25:37",
+  "sealed_by": "tools/pipeline_audit.py seal",
+  "packet": ".work\\audit\\packets\\美食：全市巡摆，馋哭食客.EP02SC02_S00_h3.packet.json",
+  "mechanical_at_seal": {
+    "errors": 0
+  }
+}

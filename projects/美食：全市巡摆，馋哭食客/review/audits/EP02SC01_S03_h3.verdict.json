@@ -1,0 +1,45 @@
+{
+  "subject": "EP02SC01_S03_h3",
+  "auditor": "model",
+  "verdict": "fail",
+  "summary": "机械不变量全绿：GEO 英文块逐字锁定、画风句在 detailed_description 第 0 字、取景句紧随 [Shot 1] 且在前 400 字内、禁字幕句在、294 帧＝17×17+5 且与分镜表登记一致、画布 1376×768、防跳轴句在、4 步 turbo LoRA 与 BasicScheduler 4 步成对；B3 的三句对白加 VO 原文一字不落，46 字按 5.5 字/秒约 8.4s，装得进 12.25s。但说话人标签不符合官方写法：同一摊主的两句被标成 (S2) 与 (S3)，VO 被标成 (S4)，而 (S4) 与 <Subject 4>（地点）冲突、且与 summary 里「VO 是闫清的」相矛盾；另有本镜台词在时间轴上完全没有落位（与「闫清面部冻结、7.0–8.5s 嘴闭合不动」相冲）、以及大特写里「屏幕占满画面／闫清的脸在左缘／摊主的手从右缘入画」三者同框的空间与朝向关系没交代清楚。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "error",
+      "code": null,
+      "claim": "台词说话人标签不符合官方写法（(Sn) 应与 <Subject n> 绑定）：摊主（Subject 2）的两句被写成 (S2) 和 (S3) 两个不同 speaker ID，同一角色被拆成两个声源；闫清的画外 VO 被写成 (S4)，而 (S4) 正是 <Subject 4>（地点「凌晨猪肉摊 · 买肉」）的编号，且与 summary 里「A voice-over from Yan Qing（Subject 1）」的归属直接矛盾。",
+      "evidence": "prompt：`<Subject 2> (S2) says, <d>[Chinese] 你放心，绝对新鲜，</d> <Subject 2> (S3) says, <d>[Chinese] 刚从屠宰场拉回来，不信你看看。</d> Off-screen voice-over (S4), <d>[Chinese] 嘿，是挺新鲜。</d>`；subject_definitions 中 `<Subject 4> is the location 凌晨猪肉摊 · 买肉`；summary：`A voice-over from Yan Qing, delivered as off-screen narration`。机械门禁 mechanical.errors 为空，未覆盖此格式项。",
+      "fix": "摊主两句统一为同一 ID：`<Subject 2> (S2) says, <d>[Chinese] 你放心，绝对新鲜，</d>` 与 `<Subject 2> (S2) says, <d>[Chinese] 刚从屠宰场拉回来，不信你看看。</d>`；VO 改为 `<Subject 1> (S1) says in an off-screen voice-over, <d>[Chinese] 嘿，是挺新鲜。</d>`（与 summary 的闫清归属一致），不要使用已被地点占用的 S4。"
+    },
+    {
+      "id": "F2",
+      "level": "warn",
+      "code": null,
+      "claim": "本镜四句台词（46 字）在 detailed_description 的时间轴上没有落位，且与画面设定冲突：7.0–8.5s 明确写闫清「嘴闭合、完全不动」，而第一句是他的问句；summary 只把 VO 说成画外，等于默认其余三句是画内台词，于是出现「一张冻住的脸要开口问话」的执行矛盾（模型多半会硬对口型，或直接丢掉问句）。根因偏上游：戏里 B3 把「问 + 答 + 答 + VO」整段给了本镜，而镜头表的取景句把闫清定成「frozen then slowly grinning」。",
+      "evidence": "prompt 时间轴：`7.0-8.5s At the left edge of frame Yan Qing's face stays completely frozen, eyes fixed on the screen, mouth closed, no movement at all`；subject_definitions S1：`His face stays frozen from 0.0s to about 8.5s`；台词块紧随时间轴之后，无任何时间标注；beats_owned.B3.dialogue 三句 + vo 一句全部落在 S03。",
+      "fix": "在台词块或时间轴里给每句分配区间（例如问句 0.3–3.0s、摊主两句 3.0–7.0s、VO 10.5–12.25s），并明确闫清的问句是否走画外；若问句本该画内，请与镜头表一起把 7.0–8.5s 的「mouth closed」改成允许口型。"
+    },
+    {
+      "id": "F3",
+      "level": "warn",
+      "code": null,
+      "claim": "大特写内「手机屏幕占满画面 + 闫清的脸在画面左缘 + 摊主的手/小臂从右缘入画」三者的空间与朝向关系没交代清楚：提示词从未说手机屏幕此刻朝镜头还是朝闫清、闫清在什么方位被看到、他的脸是实拍前景还是可能被读成屏幕内容。而 GEO 又把闫清钉在南侧 (x −0.6, y −0.9) 面朝北 (+y)、摊主在北侧 (x +0.35, y +1.15)、摄像机锁在轴线东南侧 A 面，本镜可见宽仅 0.59 m。按字面执行存在「把闫清复制成两个人（屏幕里外各一个）」「画面边缘凭空多出一只没有来路的手或少半张脸」「给成后脑勺」的歧义风险。",
+      "evidence": "detailed_description：[Shot 1] `the butcher's phone screen pushed right up into frame ... Yan Qing's face frozen then slowly grinning at the edge of frame`；S3 `The phone screen dominates the frame, pushed right up in front of the lens`；S2 `only his hand and forearm are visible, coming in from the right edge`；GEO `Yan Qing (C01): SOUTH of the counter, x −0.6, y −0.9, FACING NORTH (+y)`、`THE CAMERA STAYS ON SIDE A AT ALL TIMES`；镜头表 lens_mm 85 / dist_m 1.4 / visible_w_m 0.59。",
+      "fix": "补一句锁定空间关系：手机握在闫清脸前约 0.2–0.3 m、屏幕朝镜头；闫清只以左侧半张脸实拍入画（前景实体，不是屏幕里的画面，画面内不得出现第二张闫清的脸）；摊主仅右手与右小臂从画右入画握机，其余身体不入画；并声明摄像机在闫清侧前方，能同时看到屏幕与他的侧脸。"
+    },
+    {
+      "id": "F4",
+      "level": "info",
+      "code": null,
+      "claim": "已逐条核过且无问题的项：GEO 英文块逐字在内；画风句位于 detailed_description 第 0 字；取景句紧随 [Shot 1] 并在前 400 字内；禁字幕句在；帧数 294＝17×17+5 且与镜头表登记值一致、294/24＝12.25s＝duration_s；画布 1376×768；防跳轴句（SIDE A / NEVER CROSSES THE AXIS）与屏幕方向规则在；LoRA minimax_h3_ref2v_turbo_4step_v0.1 与 BasicScheduler 4 步成对；语音密度 46 字÷5.5≈8.4s ≤ 12.25s，装得下。",
+      "evidence": "mechanical.ok=true、errors=[]、WF-05「GEO 英文块已逐字锁定」；workflow_facts.canvas=[1376,768]、frames=294；samplers[0].widgets_values=[\"simple\",4,1.0] 与 loras[0] 的 4step turbo；prompt 内含 `No subtitles, captions or on-screen text appear at any point.`。",
+      "fix": "无需修改。"
+    }
+  ],
+  "blocking": [
+    "F1"
+  ],
+  "waivers": [],
+  "_ask": "tools/s7_verdict.py"
+}

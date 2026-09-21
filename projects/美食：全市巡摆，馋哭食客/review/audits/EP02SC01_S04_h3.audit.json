@@ -1,0 +1,74 @@
+{
+  "subject": "EP02SC01_S04_h3",
+  "auditor": "model",
+  "verdict": "pass",
+  "summary": "硬门禁逐条核对全过：三句台词（老板，给我来五十斤猪肉。/ 好嘞。/ 小伙子，以后多光顾啊！）逐句落在 <d>[Chinese] …</d> 内并带 (S1)(S2)(S3) 标号，本镜无 VO 且 summary 已声明；GEO 英文块与上游逐字一致、防跳轴句在内；画风句位于 detailed_description 第 0 字，取景句紧跟在 [Shot 1] 之后（远在 400 字内）；禁字幕句在位；175 帧＝17×10+5 与镜头表登记值／H3 widget 一致，画布 1376×768，4 步 turbo LoRA 与 4 步 BasicScheduler 成对；语音密度 21 汉字/7.29 s≈2.9 字/秒，远低于 5.5 字/秒上限。无 blocking，只留若干上游缺口与措辞层 warn/info。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "warn",
+      "code": null,
+      "claim": "整镜动作架在电动车上（驮肉、扎带、上车、骑出、停在通道口），但镜头表 assets 只登记 CHR-01/CHR-02/PRP-02/SCN-01，电动车没有对应道具条目，ref2v 无参考图会导致车型/颜色/新旧漂移。",
+      "evidence": "shot.assets = [\"CHR-01\",\"CHR-02\",\"PRP-02\",\"SCN-01\"]；提示词 <Subject 1> \"presses and cinches it onto the rear rack, then mounts and rolls the e-bike forward away from the camera\"，6.0-7.29s \"Yan Qing swings a leg over the e-bike, rolls it forward …\"。",
+      "fix": "上游补登电动车道具（如 PRP-0x）并出一张参考图；或明确 e-bike 已包含在 SCN-01 场景资产内，避免二次生成。"
+    },
+    {
+      "id": "F2",
+      "level": "warn",
+      "code": null,
+      "claim": "摊主 <Subject 2> 的服装槽位混入了性格/外貌描述（\"wearing 敦厚老实，clean-shaven\"），wearing 后面跟的不是衣着，模型可能把\"敦厚老实\"当服饰语义渲染，是槽位串味。",
+      "evidence": "\"<Subject 2> is 摊主, wearing 敦厚老实，clean-shaven；深藏青短袖工装衬衫，外罩深棕防水围裙（正面有暗红血渍与刀刮白痕）。\"",
+      "fix": "把\"敦厚老实\"移到性格/表演描述处，wearing 后只保留\"深藏青短袖工装衬衫，外罩深棕防水围裙…\"；胡须信息改写成 \"clean-shaven\" 单列。"
+    },
+    {
+      "id": "F3",
+      "level": "info",
+      "code": null,
+      "claim": "GEO 锁里没有 market mouth／通道尽头的坐标或锚点，而画面要求\"背景里 market mouth 的晨光逐渐泛白\"且人物最终停在 \"aisle mouth\"，只能靠 5000 K 冷光那一句间接支撑；存在被理解成\"柜台后墙／木门处泛白\"的构图歧义。",
+      "evidence": "GEO 全文只列 Counter/Back wall/Side piers/Lamps/Aisle y<0 与 \"the aisle behind Yan Qing adds a faint cool spill (about 5000 K)\"，无 market mouth 条目；<Subject 4> 却写 \"the market mouth in the background behind Yan Qing where the dawn light pales gradually across the shot\"。",
+      "fix": "在 GEO 里补一条 market mouth 锚点（方位＋距通道口的距离），或在取景句里限定它出现在画面左侧纵深尽头，避免晨光落到后墙木门上。"
+    },
+    {
+      "id": "F4",
+      "level": "info",
+      "code": null,
+      "claim": "同一说话人（<Subject 2> 摊主）的第二句用了 (S3) 而非沿用 (S2)，编号按台词行序递增。文本、说话人归属无误，只是与\"同人同号\"的可选口径不一致，需确认官方口径以免下游对轨错位。",
+      "evidence": "\"<Subject 2> (S2) says, <d>[Chinese] 好嘞。</d> <Subject 2> (S3) says, <d>[Chinese] 小伙子，以后多光顾啊！</d>\"",
+      "fix": "若官方口径是同人同号，则第三句改为 (S2)；若按行序编号，保持现状并在规范里写明。"
+    },
+    {
+      "id": "F5",
+      "level": "info",
+      "code": null,
+      "claim": "summary 把三句统称 \"stall dialogue\"，但第一句是闫清说的（摊主只说两句），措辞与后文枚举自相矛盾，不影响执行。",
+      "evidence": "\"The three lines of stall dialogue — the order, the reply, and the butcher's parting call — are the only speech in the shot.\"（\"the order\" 实为 <Subject 1> 闫清所说）",
+      "fix": "改成 \"The three spoken lines — Yan Qing's order, the butcher's reply, and his parting call\"。"
+    },
+    {
+      "id": "F6",
+      "level": "info",
+      "code": null,
+      "claim": "末段 1.29 秒内要完成\"抬腿跨上—起步—沿通道骑行—减速—停在通道口\"，同时摊主放下手臂并静止，节奏偏挤；帧数已由镜头表锁死 175，靠模型自行压缩有糊掉或赶拍风险。",
+      "evidence": "\"6.0-7.29s Yan Qing swings a leg over the e-bike, rolls it forward away from the camera deeper into the aisle toward the paling market mouth, receding in depth … and slows to a halt at the aisle mouth\"；镜头表 duration_s 7.29／frames 175。",
+      "fix": "简化末段（例如只起步骑出一段即\"remain still\"，把\"停在通道口\"留给下一镜），或把本镜时长/帧数上调后重登记。"
+    }
+  ],
+  "blocking": [],
+  "waivers": [],
+  "_ask": "tools/s7_verdict.py",
+  "subjects": {
+    "workflows\\EP02SC01_S04_h3.json": "c635d329ed3a05e164779f32b00fd757efdb09795302f54eaccb034f32d8fd59",
+    "script/EP02_SC01_菜市场买肉_戏.md": "a238aec5f4bbaacbc27221f5e3369ff44ed3e8d869018a9a150e1f844c298ab7",
+    "storyboard/SCN01_镜头表.json": "0d8b28cc39b30167a8b6fdae469369ce47e31c851e0d122d25f2f8f50ffca2cc",
+    "storyboard/SCN01_GEO空间地图.md": "718a287bf3effcc6659d929418c57a567c6808699f36b611ddb9bb74f246d721",
+    "audit_rules.json": "0f180e5da7de96f794650e31c81afd52e80a173f1987fe0711393f16752208f7",
+    "workflows/FF_EP02SC01_S04.json": "845f32d1e4f9744499e163aade467625079ff01d960942b09838b1a20696fba6",
+    "prompts\\S04.prompt.md": "c1b1a5db01d1ffbd97be1e924bdc57bc5a4678c7cf44e3b45811183dc3d81ee2"
+  },
+  "sealed_at": "2026-09-21T18:41:39",
+  "sealed_by": "tools/pipeline_audit.py seal",
+  "packet": ".work\\audit\\packets\\美食：全市巡摆，馋哭食客.EP02SC01_S04_h3.packet.json",
+  "mechanical_at_seal": {
+    "errors": 0
+  }
+}

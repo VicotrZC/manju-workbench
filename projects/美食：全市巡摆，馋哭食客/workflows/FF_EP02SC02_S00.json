@@ -173,7 +173,7 @@
         }
       ],
       "widgets_values": [
-        "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\nA static wide shot at eye level on the pre-dawn street; Yan Qing rides his small e-bike alone on the left, the empty saddle behind him, heading toward the market; far off on the right edge a street sweeper walks away in a hi-vis vest.\n闫清，深夜出门的便装，沿用 CHR-01 基础造型，**单人骑车、后座空着**；外景，无围裙、无湿手、无屠宰血迹，a small old scar just above the outer end of his left eyebrow\n画面里是干净的无字画面。\n道具：小电驴（闫清代步电动车）"
+        "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\nStatic wide shot, eye level, pre-dawn street; Yan Qing alone on the left, riding frame-right toward the market, empty saddle behind him; far right, a sweeper in a hi-vis vest, back to the lens, sweeping in place.\n闫清，深夜出门的便装，沿用 CHR-01 基础造型，单人骑车、后座空着；外景，无围裙、无湿手、无屠宰血迹，a small old scar just above the outer end of his left eyebrow（too small to read at this distance — do not zoom in）\n画面里是干净的无字画面。\n道具：小电驴（闫清代步电动车）\n场景：场地 = 中国某小区外的一条东西向城市街道；街道 = 沥青路面；人行道 = 南北各一条，凌晨四点。"
       ],
       "properties": {
         "Node name for S&R": "CLIPTextEncode"
@@ -397,7 +397,7 @@
       "inputs": [],
       "outputs": [],
       "widgets_values": [
-        "# SCN-02 S00 · 首帧（t2i）\n\n**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n| 项 | 值 |\n|---|---|\n| 画布 | 1376×768 |\n| 步骤 | 8 步 / CFG 1.0 |\n| 景别 | 全景 |\n| 镜头 | 24mm |\n| 距离 | 4.0m |\n| 可见宽 | 6.0m |\n\n出图落 `outputs/FF_EP02SC02_S00_00001_.png`（`SaveImage` 前缀 `meishi/FF_EP02SC02_S00`）。\n\n**首帧就是构图**：H3 把 `<Picture 1>` 当起点状态、景别基本被沿用，所以景别与机位只能在这里定死。"
+        "# SCN-02 S00 · 首帧（t2i）\n\n**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n| 项 | 值 |\n|---|---|\n| 画布 | 1376×768 |\n| 步骤 | 8 步 / CFG 1.0 |\n| 景别 | 全景 |\n| 镜头 | 24mm |\n| 距离 | 4.0m |\n| 可见宽 | 6.0m |\n\n出图落 `outputs/FF_EP02SC02_S00_00004_.png`（`SaveImage` 前缀 `meishi/FF_EP02SC02_S00`）。\n\n**首帧就是构图**：H3 把 `<Picture 1>` 当起点状态、景别基本被沿用，所以景别与机位只能在这里定死。"
       ],
       "properties": {
         "Node name for S&R": "MarkdownNote"

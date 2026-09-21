@@ -1,0 +1,43 @@
+{
+  "subject": "EP02SC01_S02_h3",
+  "auditor": "model",
+  "verdict": "pass",
+  "summary": "六段结构齐全：GEO 英文块与上游逐字一致、画风句在 detailed_description 第 0 字、取景句紧随 [Shot 1] 且与镜头表 framing_en 逐字相同、禁字幕句在位；175 帧＝17k+5 且与镜头表/节点控件一致，画布 1376×768，防跳轴句（side A / never crosses the axis）在位，turbo_4step LoRA 与 BasicScheduler(simple,4,1.0) 成对。台词三句（摊主两句＋闫清 VO）全部落在 <d>[Chinese] …</d> 内，机械 ERROR 为空。两条 warn 不阻塞：语音密度 95%（5.5 字/秒口径装得下但无余量，且 7.29s 已超出 B2 登记的 6s 节拍窗），以及同一说话人两句话分标 (S1)/(S2) 的音色分裂风险。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "warn",
+      "code": "WF-20",
+      "claim": "语音密度 95%，超出戏 §三 自定的 75% 上限；按 5.5 汉字/秒口径仍装得下，但余量仅 0.38s，全镜几乎无静默。",
+      "evidence": "mechanical.items WF-20：镜头 S02 语音密度 95%（38 字 / 7.29s）。38÷7.29＝5.21 字/秒，5.21÷5.5＝94.8%。shot._frames_note：38 字 @5.5 字/秒 需 6.91s，158 帧 6.58s 装不下，故 175 帧 7.29s（用户拍板）。beats_owned B2 header 为 0:06–0:12（6s），本镜 7.29s 已超该节拍窗 1.29s。",
+      "fix": "提示词本身无需改。由上游决定：接受 95% 密度（用户已拍板 175 帧）或压缩/拆台词、放宽 B2 节拍窗；同时复核相邻镜（S01/S03）的时间轴是否被这 1.29s 挤位。"
+    },
+    {
+      "id": "F2",
+      "level": "warn",
+      "code": null,
+      "claim": "同一说话人的两句连续台词被标成两个不同说话人编号 (S1)/(S2)，且 VO 行 (S3) 未绑定说话主体；若 S 号按说话人计，摊主的两句话会被分配两个音色。",
+      "evidence": "提示词：`<Subject 2> (S1) says, <d>[Chinese] 我们家的猪肉，</d> <Subject 2> (S2) says, <d>[Chinese] 可是上好的黑猪肉，和普通猪肉不一样。</d>`。beats_owned B2 的 dialogue 两行同属摊主（同一节拍、同一人连续一句），而 Vo 行写作 `Off-screen voice-over (S3), <d>[Chinese] 看着好像是有点儿不一样。</d>`，戏里这是闫清的内心 OS，但该行未标主体。",
+      "fix": "同为摊主的两句沿用同一 S 号（第二句改回 (S1) 或明确注明连读）；VO 行补主体，如 `<Subject 1> (S2) off-screen inner voice-over, <d>[Chinese] …</d>`。若管线约定 S 号按行递增而非按人，请在提示词里显式说明，避免 TTS 拆声。"
+    },
+    {
+      "id": "F3",
+      "level": "info",
+      "code": null,
+      "claim": "取景句要求「近景、更紧地压在案板与两人之间的肉上」，而 GEO 把两人沿视线轴拉开 2.05 m，同一画面里两人的景别会明显不等（属上游镜头表口径，非提示词缺陷）。",
+      "evidence": "grep_geo：Yan Qing (C01) x −0.6 / y −0.9（案板南侧），butcher (C04) x +0.35 / y +1.15（案板北侧），沿 y 轴相距 2.05 m。镜头表：shot_size 近景，lens 50，dist_m 2.6，visible_w_m 1.87（＝36/50×2.6）。50mm 下若 2.6 m 落在二人中点，前侧闫清距机约 1.6 m（画面宽约 1.15 m，近胸像）、后侧摊主约 3.65 m（画面宽约 2.6 m，中景），两者比例约 2.3×。",
+      "fix": "提示词（逐字复述 framing_en）无需改。建议上游确认 CAM2 dist_m 2.6 的基准平面是案板/肉还是二人中点，并在镜头表标注；否则生成时可能把前侧人物放得过大、后侧摊主过小，与「近景」登记值不符。"
+    },
+    {
+      "id": "F4",
+      "level": "info",
+      "code": null,
+      "claim": "结构项逐条核对通过，作为本轮已核证据留档。",
+      "evidence": "①GEO 块与 geo_block 逐字一致（WF-05 INFO）；②画风句位于 detailed_description 第 0 字；③取景句紧接 `[Shot 1]` 且与 shot.framing_en 逐字相同；④`No subtitles, captions or on-screen text appear at any point.` 在位；⑤175＝17×10+5，与 shot.frames、h3_widgets 帧数一致，CreateVideo 24 fps → 175/24＝7.29s＝shot.duration_s；⑥canvas 1376×768；⑦防跳轴句在 GEO 内（`THE CAMERA STAYS ON SIDE A AT ALL TIMES AND NEVER CROSSES THE AXIS` ＋ 换边/重复禁令）；⑧minimax_h3_ref2v_turbo_4step_v0.1（strength 1.0）与 BasicScheduler simple/4 步/cfg 1.0 成对；⑨三段 subject_definitions 覆盖 CHR-01/CHR-02/SCN-01，时间轴 0.0–7.29s 无空档。",
+      "fix": "无需处理。"
+    }
+  ],
+  "blocking": [],
+  "waivers": [],
+  "_ask": "tools/s7_verdict.py"
+}

@@ -720,8 +720,15 @@ def check_chain(proj: Path, rules: dict, materials: str = "error",
         for it in sub.items:
             if it["code"] in PROP:
                 code, what = PROP[it["code"]]
+                # ⚠️ **措辞必须跟着 level 走，不能硬编码「不过」。**
+                # 2026-09-21：子条目 `WF-04` 在**达标**时也会以 INFO 报一条
+                # （「画风句占比 21.6%（下限 20%）」），而这里原来一律拼「占比不过」——
+                # 于是报告里出现「首帧画风句占比不过 … 占比 21.6%」，**文案与数值直接打架**。
+                # 模型审计连着三轮把它当成缺陷报上来，是对的。
+                verdict = {"ERROR": "不过", "WARN": "有风险", "INFO": "达标"}.get(
+                    it["level"], it["level"])
                 rep.add(it["level"], code,
-                        f"{what}不过（镜头表登记的首帧出自 {fw}）："
+                        f"{what}{verdict}（镜头表登记的首帧出自 {fw}）："
                         f"[{it['code']}] {it['msg']}",
                         detail={k: v for k, v in it.items()
                                 if k not in ("level", "code", "msg")})
@@ -1050,7 +1057,14 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
         owned = [b for b in (shot.get("beats") or []) if b in beats]
         expects_speech = any(beats[b]["has_dialogue"] for b in owned)
         has_tag = bool(SPEECH_TAG_RE.search(prompt))
-        denies = bool(NO_SPEECH_RE.search(prompt))
+        # ⚠️ **「无人说话」只在 `detailed_description` 里判，不扫全文。**
+        # 2026-09-21 实测的误报：`overall_soundscape` 段写了一句
+        # 「No voices beyond the scripted lines」（＝除了台词没有别的说话声），
+        # 那是**正经的音景描述**，却被 `NO_SPEECH_RE` 当成"声明无人说话"，
+        # 于是判 `WF-09`「有对白却声明无人说话」—— 而那句 `<d>[Chinese] …</d>` 就在同一份提示词里。
+        # **"无人说话"是关于画面的声明，属于 detailed_description 这一段。**
+        speech_scope = fields.get("detailed_description", "") if kind == "h3" else prompt
+        denies = bool(NO_SPEECH_RE.search(speech_scope))
         if expects_speech and denies:
             rep.error("WF-09",
                       "**这一镜认领的节拍里有对白，提示词却声明「无人说话」** —— "
@@ -1297,8 +1311,52 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             for b in (shot or {}).get("beats", [])],
         "geo_block": geo,
         "mechanical": rep.dump(),
+        # ⚠️ **把工作流的机械事实也放进包里**（2026-09-21 模型审计提出的缺口）：
+        # 它说「审计包未附工作流本体，采样档位与 LoRA 是否成对、画布是否为 1376×768
+        # 两项**无法核对**」—— 而那两项恰恰是这一镜能不能跑出来的关键。
+        # 模型看不到文件系统，**程序不主动给的事实它就核不了**。
+        "workflow_facts": _workflow_facts(wf, nodes),
     }
     return rep, packet
+
+
+def _workflow_facts(wf: dict, nodes: list) -> dict:
+    """工作流的机械事实（给审计员核对的原料，不是判断）。"""
+    facts: dict = {}
+    h3 = h3_nodes(wf)
+    if h3:
+        wv = h3[0].get("widgets_values") or []
+        facts["h3_node_type"] = h3[0].get("type")
+        facts["h3_widgets"] = [wv[0][:60] + "…" if isinstance(wv[0], str) and len(wv[0]) > 60
+                               else wv[0]] + wv[1:] if wv else []
+        if len(wv) >= 4:
+            facts["canvas"] = [wv[1], wv[2]] if isinstance(wv[1], int) else None
+            facts["frames"] = wv[3] if isinstance(wv[3], int) else None
+    lat = [n for n in nodes if n.get("type") in
+           ("EmptySD3LatentImage", "EmptyLatentImage", "EmptyLatentImagePresets")]
+    if lat:
+        wv = lat[0].get("widgets_values") or []
+        if len(wv) >= 2:
+            facts["canvas"] = [wv[0], wv[1]]
+    loras = []
+    for n in nodes:
+        if n.get("type") == "LoraLoaderModelOnly":
+            wv = n.get("widgets_values") or []
+            loras.append({"file": wv[0] if wv else None,
+                          "strength": wv[1] if len(wv) > 1 else None})
+    facts["loras"] = loras
+    samplers = []
+    for n in nodes:
+        if n.get("type") in ("KSampler", "KSamplerAdvanced", "SamplerCustom",
+                             "SamplerCustomAdvanced", "BasicScheduler"):
+            samplers.append({"type": n.get("type"),
+                             "widgets_values": n.get("widgets_values")})
+    facts["samplers"] = samplers
+    for t in ("LoadImage", "SaveImage", "SaveVideo", "CreateVideo"):
+        n = next((x for x in nodes if x.get("type") == t), None)
+        if n:
+            facts[t] = n.get("widgets_values")
+    return facts
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1498,17 +1556,33 @@ def cmd_verify(proj: Path, subject: str, rules: dict, quiet: bool = False) -> in
         return 2
     v = json.loads(read(out))
     files = subject_files(proj, subject, rules)
-    stale = []
+    stale, unbound = [], []
     for rel, h in (v.get("subjects") or {}).items():
         p = proj / rel
-        if not p.exists() or sha256(p) != h:
-            stale.append(rel)
+        if not p.exists():
+            stale.append(f"{rel}（文件没了）")
+        elif sha256(p) != h:
+            stale.append(f"{rel}（内容变了）")
+    # ⚠️ 封条没绑到、但**现在该绑**的文件 —— 与"内容变了"分开报。
+    # 2026-09-21 实测：原来两种都写成「新增，未在封条内」，
+    # 于是 `script/…戏.md` 这种**一直都在**的文件被报成"新增"，
+    # 读的人会以为它刚被创建，而真实原因是**封条当初漏绑了它**。
+    # 两种原因的处置不同：内容变了 → 重审；封条漏绑 → 重封（并说明判据变过）。
     for rel in files:
         if rel not in (v.get("subjects") or {}):
-            stale.append(rel + "（新增，未在封条内）")
-    if stale:
-        print(f"⛔ [AUDIT-02] 审计封条已过期 —— 被审文件在审计之后变了：{stale}")
-        print(f"   提示词改了就必须重新审。重跑 preflight → 子 agent → seal。")
+            unbound.append(rel)
+    if stale or unbound:
+        print("⛔ [AUDIT-02] 审计封条已过期 —— 不能拿它当『这一版被审过』。")
+        if stale:
+            print(f"   ① 被审文件在审计之后变了（{len(stale)} 个）：")
+            for s in stale:
+                print(f"      - {s}")
+        if unbound:
+            print(f"   ② 现在该被绑、但封条里没有的文件（{len(unbound)} 个）"
+                  f"—— 多半是**判据变过**（该绑的清单扩了）：")
+            for s in unbound:
+                print(f"      - {s}")
+        print("   提示词或判据改了就必须重新审：重跑 preflight → 出判定 → seal。")
         return 2
     if v["verdict"] != "pass":
         blocking = v.get("blocking") or [f.get("id") for f in v["findings"]

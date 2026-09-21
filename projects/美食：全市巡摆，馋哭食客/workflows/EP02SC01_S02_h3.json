@@ -1,0 +1,831 @@
+{
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      }
+    },
+    {
+      "id": 2,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        40,
+        170
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            9,
+            11
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      }
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        420,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      }
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            18,
+            20
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        550
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            4,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 6,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        650
+      ],
+      "size": [
+        320,
+        320
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "FF_EP02SC01_S02_00001_.png",
+        "image"
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      }
+    },
+    {
+      "id": 7,
+      "type": "MiniMaxH3ReferenceToVideo",
+      "pos": [
+        520,
+        40
+      ],
+      "size": [
+        720,
+        560
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 4
+        },
+        {
+          "name": "ref_images.ref_image_0",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            10
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            16
+          ],
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "subject_definitions:\n<Subject 1> is 闫清, wearing 无围裙、无湿手、无血迹的日常便装；沿用基础造型。. Identity anchor that must be visible: a small old scar just above the outer end of his left eyebrow. In [Shot 1] Yan Qing stays on frame left for the entire shot. He begins upright and still, then leans his upper body forward over the counter toward the meat between the two men, holds that lean, raises his right hand to press the meat once and lifts the hand clear, and ends leaning in over the counter, motionless..\n<Subject 2> is 摊主, wearing 敦厚老实，clean-shaven；深藏青短袖工装衬衫，外罩深棕防水围裙（正面有暗红血渍与刀刮白痕）。. Identity anchor that must be visible: an old knife scar in the web of his right hand. In [Shot 1] The butcher stays on frame right for the entire shot and never changes position. He raises his chin toward the meat, lowers it, turns his palm upward over the meat in a short arc, keeps one hand flat on the counter edge, and remains in place..\n<Subject 3> is the location 凌晨猪肉摊 · 买肉. In [Shot 1] The early-morning pork stall itself does not change: the counter surface and the meat on it stay in the same place at the centre of the frame, the aisle behind stays as established, and no light source or object is added or removed..\n<Picture 1> is the first frame of [Shot 1] and fixes the framing, the camera position and the lighting. The shot scale is already final in <Picture 1> and must not change.\n\nsummary:\nA static medium-close shot at the pork stall, tighter on the counter surface and the meat between Yan Qing on frame left and the butcher on frame right. The butcher presents the cut, and Yan Qing leans in over the counter, presses the meat once with his fingers and studies its grain, ending still in that lean. A voice-over — Yan Qing's inner voice — remarks off-screen that it does seem to look a little different.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved — Yan Qing is on frame left as specified, stays in frame for the whole shot, and his lean-in and single press on the meat are carried through to the final held pose. <Subject 2> (appears in [Shot 1]): fully_preserved — the butcher is on frame right as specified, remains in frame and in place for the whole shot with chin raise and palm gesture intact, with no displacement. <Subject 3> (appears in [Shot 1]): fully_preserved — SCN-01, the early-morning pork stall with its counter surface and the meat, remains the single unchanged location; no additional set, prop, light source or extra piece of meat is introduced.\n\ndetailed_description:\n国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\n\n[Shot 1] A static medium-close shot at eye level from the market aisle, tighter on the counter surface and the meat between the two men, Yan Qing on frame left, the butcher on frame right raising his chin at the meat.\n\nGEOSPATIAL LOCK (identical in every shot of this scene):\n— Location: a pork stall inside an indoor Chinese wet market. The stall sits on the NORTH side of the market aisle and FACES SOUTH, toward the aisle and the camera.\n— Coordinates: x increases to the EAST, y increases to the NORTH.\n— Counter: one long white-tiled counter lying east-west, x −1.5 to +1.5, y 0 to +0.8 (3.00 m long, 0.80 m deep, 0.90 m high).\n— Back wall: pale tiled, x −1.8 to +1.8, y +1.5 to +1.7, with one dark wooden door centred at x 0.\n— Side piers: 0.20 m thick each, at x ±1.6 to ±1.8, y 0 to +1.5.\n— Sausages: one long string of red sausages hangs on the EAST pier (anchor A4, x +1.7, y +1.0).\n— Lamps: five red umbrella-shaped pendant lamps in one row above the counter at y +0.4, at x −1.4, −0.7, 0, +0.7, +1.4, all 2.40 m above the floor.\n— Under the counter: a white foam box (A5, x −1.9), a blue plastic crate (A6, x +0.75), a white plastic bucket (A7, x +1.9).\n— Floor: wet terrazzo with a soft sheen.\n— Aisle: y < 0, about 3.5 m wide. A row of other stalls stands opposite, y −4.5 to −3.6.\n— Anchors: A1 = west end of the counter, A2 = east end of the counter, A3 = centre of the wooden door, A8 = centre line of the lamp row.\n— Yan Qing (C01): SOUTH of the counter, x −0.6, y −0.9, FACING NORTH (+y).\n— The butcher (C04): NORTH of the counter, x +0.35, y +1.15, FACING SOUTH (−y).\n— 180-degree axis: the line joining the two men's eyes. Side A lies to the SOUTH-EAST of it, side B to the NORTH-WEST. THE CAMERA STAYS ON SIDE A AT ALL TIMES AND NEVER CROSSES THE AXIS.\n— Motivated light: the five red pendant lamps (about 3000 K, axis straight down and very slightly south) are the stall's ONLY light source; the aisle behind Yan Qing adds a faint cool spill (about 5000 K) at much lower intensity. Every shadow falls almost straight down and slightly toward the back of the stall, soft-edged and low in contrast. No unmotivated light, no rim light, no lens flare.\n— Screen direction rule: the butcher stays on the EAST (frame right) side behind the counter and Yan Qing stays on the WEST (frame left) side in front of it, IN EVERY SHOT. The two men never swap sides, never cross the counter, and neither man is ever duplicated or appears twice anywhere in the frame.\n\n0.0-1.5s The butcher, on frame right, lifts his chin toward the meat on the counter and holds it there, shoulders squared, one hand resting flat on the counter edge; Yan Qing, on frame left, stands still with his weight on both feet, eyes fixed down on the cut. 1.5-3.0s The butcher's chin eases back down and he turns his palm upward over the meat, tracing a short arc above it without touching; Yan Qing's head tilts a few degrees, his feet still planted on frame left. 3.0-4.4s Yan Qing pitches his upper body forward from frame left, leaning in over the counter surface until his head and shoulders come closer to the meat at the centre of the frame; the butcher stays put on frame right. 4.4-5.6s Yan Qing's right hand rises and presses down once on the meat, fingertips flattening the surface for a beat, then the hand lifts clear and hovers just above the counter. 5.6-6.6s Yan Qing keeps the same forward lean, head low, eyes travelling slowly across the grain of the meat, while the butcher holds his position on frame right with his hand still resting on the counter. 6.6-7.29s Both men settle and hold without further movement: Yan Qing remains leaned in over the counter on frame left with his hand still above the surface, the butcher remains stationary on frame right, and the frame ends on this held pose.\n\n<Subject 2> (S1) says, <d>[Chinese] 我们家的猪肉，</d> <Subject 2> (S2) says, <d>[Chinese] 可是上好的黑猪肉，和普通猪肉不一样。</d> Off-screen voice-over (S3), <d>[Chinese] 看着好像是有点儿不一样。</d>\n\nNo subtitles, captions or on-screen text appear at any point.\n\noverall_soundscape:\nLow, steady early-morning market ambience: distant stall chatter and footsteps along the aisle, a faint cleaver tap on wood somewhere off-frame, the soft hum of a cooler, and a light metallic clink. The bed is kept low and continuous so the spoken lines and the voice-over sit clearly above it, and no other voices are added.\n\nnon_diegetic_music:\nnone",
+        1376,
+        768,
+        175
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+      }
+    },
+    {
+      "id": 8,
+      "type": "RandomNoise",
+      "pos": [
+        1280,
+        40
+      ],
+      "size": [
+        320,
+        82
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        20261022,
+        "fixed"
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      }
+    },
+    {
+      "id": 9,
+      "type": "BasicGuider",
+      "pos": [
+        1280,
+        170
+      ],
+      "size": [
+        320,
+        46
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      }
+    },
+    {
+      "id": 10,
+      "type": "KSamplerSelect",
+      "pos": [
+        1280,
+        260
+      ],
+      "size": [
+        320,
+        58
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            14
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "res_multistep"
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      }
+    },
+    {
+      "id": 11,
+      "type": "BasicScheduler",
+      "pos": [
+        1280,
+        360
+      ],
+      "size": [
+        320,
+        106
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            15
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "simple",
+        4,
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      }
+    },
+    {
+      "id": 12,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1660,
+        40
+      ],
+      "size": [
+        300,
+        130
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 12
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 13
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 14
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 15
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            17,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      }
+    },
+    {
+      "id": 13,
+      "type": "VAEDecode",
+      "pos": [
+        1660,
+        220
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 17
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 14,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1660,
+        300
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            22
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      }
+    },
+    {
+      "id": 15,
+      "type": "CreateVideo",
+      "pos": [
+        1960,
+        40
+      ],
+      "size": [
+        300,
+        106
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 21
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            23
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        24.0
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      }
+    },
+    {
+      "id": 16,
+      "type": "SaveVideo",
+      "pos": [
+        1960,
+        200
+      ],
+      "size": [
+        420,
+        300
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 23
+        }
+      ],
+      "outputs": [],
+      "widgets_values": [
+        "meishi/EP02SC01_S02_h3",
+        "auto",
+        "auto"
+      ],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      }
+    },
+    {
+      "id": 17,
+      "type": "MarkdownNote",
+      "pos": [
+        2420,
+        40
+      ],
+      "size": [
+        600,
+        720
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "widgets_values": [
+        "# SCN-01 S02 · H3 Ref2VA（六段式）\n\n**本文件由 `pipeline.py gen S6` 用模板生成，不是手写的。**\n\n| 项 | 值 |\n|---|---|\n| 后端 | MiniMax H3 **Ref2VA**（一次前向同时出画面＋声音） |\n| 画布 | 1376×768 |\n| 帧数 | **175** ＝ 17k+5 ✅ |\n| 时长 | 7.29s @ 24fps |\n| 采样 | **4 步** / simple / res_multistep / denoise 1.0 |\n| LoRA | `minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors`（**4 步档**）|\n| 参考图 | 只有 `ref_image_0` ＝ `<Picture 1>`，来自 `FF_EP02SC01_S02_00001_.png` |\n\n**六段式段序固定**：subject_definitions → summary → retention_analysis →\ndetailed_description → overall_soundscape → non_diegetic_music。\n\n**画风句在 detailed_description 第 0 字，GEO 英文块逐字在内** —— 这两条由程序拼进去，改提示词前先看 `pipeline/docs/06_审计闸门.md`。"
+      ],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      3,
+      0,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      4,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      5,
+      0,
+      7,
+      2,
+      "VAE"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      3,
+      "IMAGE"
+    ],
+    [
+      9,
+      2,
+      0,
+      9,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      7,
+      0,
+      9,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      11,
+      2,
+      0,
+      11,
+      0,
+      "MODEL"
+    ],
+    [
+      12,
+      8,
+      0,
+      12,
+      0,
+      "NOISE"
+    ],
+    [
+      13,
+      9,
+      0,
+      12,
+      1,
+      "GUIDER"
+    ],
+    [
+      14,
+      10,
+      0,
+      12,
+      2,
+      "SAMPLER"
+    ],
+    [
+      15,
+      11,
+      0,
+      12,
+      3,
+      "SIGMAS"
+    ],
+    [
+      16,
+      7,
+      1,
+      12,
+      4,
+      "LATENT"
+    ],
+    [
+      17,
+      12,
+      0,
+      13,
+      0,
+      "LATENT"
+    ],
+    [
+      18,
+      4,
+      0,
+      13,
+      1,
+      "VAE"
+    ],
+    [
+      19,
+      12,
+      0,
+      14,
+      0,
+      "LATENT"
+    ],
+    [
+      20,
+      5,
+      0,
+      14,
+      1,
+      "VAE"
+    ],
+    [
+      21,
+      13,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      14,
+      0,
+      15,
+      1,
+      "AUDIO"
+    ],
+    [
+      23,
+      15,
+      0,
+      16,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

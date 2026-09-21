@@ -1912,6 +1912,32 @@ def shot_for_ff_workflow(scene: dict, wf_name: str) -> dict:
     return {}
 
 
+def asset_clause(text: str) -> str:
+    """把资产清单里的中文说明压成一句能画的话 —— **只做一件安全的事**。
+
+    ## 为什么这里这么保守（2026-09-21 栽过一次）
+
+    我原来在这里写了一套"识别元信息并丢掉整句"的规则，结果把**真信息也删了**：
+    「无围裙、无湿手、无血迹的日常便装」被当成元信息整句丢弃 ——
+    而那正是**要画出来的东西**（`WF-08` 的正向锁就靠它）。
+
+    **代码不该替人判断"哪句是元信息"。** 正确做法是**改数据**
+    （清单的 `costume` 只写画面里看得见的东西），而不是让代码猜。
+
+    所以这里只做一件事：去掉括号里的**资产文件说明**
+    （「（无头中立件＋背面全身件，全身图优先）」——那个形式明确、绝不含画面信息）。
+    另有 `build_t2i_prompt` 里的诊断：造型字段里出现动作痕迹会直接报出来。
+    """
+    t = str(text or "").strip()
+    t = re.sub(r"[（(][^）)]*(?:资产|全身图|中立件|无头|背面件|切图|文件)[^）)]*[）)]",
+               "", t)
+    # 去掉 Markdown 强调符 —— 资产清单是**给人读的**，里面会写 `**单人骑车、后座空着**`；
+    # 星号进提示词没有任何作用，还会占字数（2026-09-21 实测漏进过提示词）
+    t = re.sub(r"\*+", "", t)
+    t = re.sub(r"\s{2,}", " ", t)
+    return t.strip("。．.；;，,、 ")
+
+
 def p1_assets(proj: Path, rules: dict, scene: dict, shot: dict) -> dict:
     """这一镜用到的资产明细（从资产清单里按 `assets` 字段取）。
 
@@ -2006,12 +2032,15 @@ def framing_t2i(shot: dict, budget: int) -> str:
     可以写得细；但 t2i 描述段有硬预算（画风句 100 字 / 下限 20% ＝ 500 字上限），
     直接放整句会把占比压到 19.0%（实测）。
 
-    压缩**只做两件事**，都不丢信息：
-    1. 砍掉冗余限定词（`and is the only figure close to the camera` 这类，
-       已在别的分句里说过）；
-    2. 语义压缩固定短语（`at eye level` → `eye level`、`his face turned away` → `face away`）。
-    **不删任何分句** —— 构图信息（有几个人、谁在哪、朝哪）一个都不能少，
-    上一版就是因为丢了构图信息才把闫清画成两个人。
+    压缩按**优先级分句保留**，并在句子内部做短语压缩：
+    1. 每个分句先做短语压缩（`at eye level` → `eye level` 之类）；
+    2. 仍超预算时，**从最后一个分句往前丢** —— 即"先保构图主干，再保细节"；
+    3. 丢的时候**报出来**（哪个分句被丢了），因为构图信息少一条就是少一条。
+
+    ⚠️ 2026-09-21 实测的 bug：原来错在**句中间硬截断**（`"".join(keep) + part` 超出就 break），
+    结果 `far off on the right edge a street sweeper …` 那半句被切掉 ——
+    **而环卫工人正是防"闫清被画成两个人"的关键描述**（前两版首帧都是这么坏的）。
+    模型审计把它判成 blocking error 是对的。
     """
     f = (shot.get("framing_en") or "").strip()
     if not f or PA.noscript_chars(f) <= budget:
@@ -2020,16 +2049,18 @@ def framing_t2i(shot: dict, budget: int) -> str:
         (r"\band is the only figure close to the camera\b", ""),
         (r"\bA static wide shot at eye level\b", "Static wide shot, eye level"),
         (r"\bA static medium shot at eye level\b", "Static medium shot, eye level"),
+        (r"\bA static extreme close shot at eye level\b", "Static XCU, eye level"),
         (r"\bfrom mid-ground across the frame\b", "mid-ground, across frame"),
-        (r"\btoward the market\b", "toward the market"),
+        (r"\bheading frame-right toward the market\b", "heading frame-right"),
         (r"\bseen from behind as a distant small silhouette\b",
          "from behind, distant small silhouette"),
         (r"\bin a high-visibility vest\b", "in a hi-vis vest"),
         (r"\bhis face turned away and his body much smaller than Yan Qing's\b",
          "face away, much smaller than Yan Qing"),
-        (r"\bshowing exactly\b", "showing exactly"),
         (r"\bone street sweeper is\b", "one street sweeper"),
         (r"\bYan Qing rides his small e-bike\b", "Yan Qing rides his e-bike"),
+        (r"\bwalks away in a hi-vis vest pushing a long broom\b",
+         "walks off pushing a broom, hi-vis vest"),
     ]
     out = f
     for pat, rep in subs:
@@ -2037,14 +2068,16 @@ def framing_t2i(shot: dict, budget: int) -> str:
     out = re.sub(r"\s{2,}", " ", out).replace(" ;", ";").replace("; ;", ";")
     if PA.noscript_chars(out) <= budget:
         return out
-    print(f"   ⚠️ t2i 取景句压到 {PA.noscript_chars(out)} 字仍超 {budget} 字预算，"
-          f"按分句截断（可能丢构图信息 —— 请检查）")
-    keep = []
-    for part in re.split(r"(?<=[;.])", out):
-        if PA.noscript_chars("".join(keep) + part) > budget:
-            break
-        keep.append(part)
-    return "".join(keep).strip() or out
+
+    # 仍超预算 → **按分句从后往前丢**，并把丢掉的报出来
+    parts = [p for p in re.split(r"(?<=[;.])\s*", out) if p.strip()]
+    dropped = []
+    while len(parts) > 1 and PA.noscript_chars(" ".join(parts)) > budget:
+        dropped.append(parts.pop())
+    if dropped:
+        print(f"   ⚠️ t2i 取景句超 {budget} 字预算，**丢掉了 {len(dropped)} 个分句**"
+              f"（构图信息会少 —— 请核）：{' ｜ '.join(d.strip() for d in dropped)}")
+    return " ".join(parts).strip()
 
 
 def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
@@ -2087,8 +2120,12 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
     # 又给人物句（约 80 字）留得出位置（画风句 100 ÷ 20% ＝ 总量上限 500）。
     must = [style]
     if shot.get("framing_en"):
-        must.append(framing_t2i(shot, 200))
-    # ── ② 必需：身份锚（WF-07 逐字核这句英文）+ 正向否定锁（WF-08）──
+        # ⚠️ 预算要**够放下完整取景句** —— 2026-09-21 实测：给 200 字时
+        # SCN-02 的取景句（含环卫工人那条分句）被**整条删掉**，
+        # 首帧于是少画一个人（模型审计判成 blocking error）。
+        # 取景句是首帧的**构图本体**，宁可让场景行让位，也不能让取景句缺分句。
+        must.append(framing_t2i(shot, 260))
+    # ── ② 第 1 档：身份锚（WF-07 逐字核这句英文）+ 正向否定锁（WF-08）──
     who = []
     for c in assets["characters"]:
         bits = []
@@ -2097,22 +2134,85 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
         if c.get("costume"):
             # ⚠️ 去掉结尾标点再拼 —— 否则会出现「……本身（…用）。，a small old scar…」
             # 这种双标点（2026-09-21 实测）。**拼接出来的提示词也要读得通。**
-            bits.append(str(c["costume"]).rstrip("。．.；;，,、 "))
+            cos = asset_clause(str(c["costume"])).rstrip("。．.；;，,、 ")
+            # ⚠️ **造型字段里不许有动作**（2026-09-21 栽过两次，两次都让画风占比掉到 15–19%）：
+            #   第一次 SCN-02：写了「从被窝坐起 → 骑小电驴穿过空街去菜市」，静帧把床与被褥也画了进来；
+            #   第二次 SCN-01：两个角色的 costume 里各塞了 4 个节拍的动作（「B1 空手进摊问价，B2 凑到…」），
+            #     字段涨到 135–152 字，把 t2i 描述段顶爆 → 画风句占比 15%（下限 20%）。
+            # **造型只写穿什么**；动作归戏与 H3 的时间轴。
+            acts = sorted(set(re.findall(r"→|\bB\d\b|镜头|第 ?\d ?镜", cos)))
+            if acts:
+                print(f"   ⛔ 资产 {c.get('id')} 的 `costume` 里混进了动作：{acts}"
+                      f"（{PA.noscript_chars(cos)} 字）—— **造型字段只写穿什么**。"
+                      f"把动作挪回戏文件，否则 t2i 描述段会被顶爆、画风占比不达标。")
+            bits.append(cos)
         if c.get("signature"):
-            bits.append(str(c["signature"]))          # **英文原文，逐字**
+            # ⚠️ **能看见才要求看见**（2026-09-21，模型审计提出）：
+            # 这一镜的景别／机位下那条疤**物理上不可见**（`signature_visible: false`），
+            # 而首帧的职责恰恰是**把脸画出来并锚定它** —— 所以疤的英文原文照样写进去
+            # （`WF-07` 逐字核它，首帧血缘靠它），但**必须同时给出"不要为它改机位"的护栏**，
+            # 否则模型会为了露出疤而自作主张推近或让他转头（那正是旧线的失败模式）。
+            sig = str(c["signature"])
+            if shot.get("signature_visible", True):
+                bits.append(sig)
+            else:
+                # ⚠️ 护栏要**短**，而且**不许出现"转头"这类词**。
+                # 2026-09-21 两次实测：
+                #   ① 写成 145 字的长句 → 把 t2i 描述段顶爆，道具／"无字"／场景三档全被丢掉；
+                #   ② 写成「do not zoom in **or turn his head** to reveal it」→
+                #      **模型反而把闫清的头转向了镜头**（他本该朝画面右、被看到侧面）。
+                #      **"不要转头"是一句会招来转头的话** —— 与 `no foreground figure`
+                #      招来前景人物是同一类失败（负向措辞在 CFG 1.0 下无效，还容易被画出来）。
+                # 现在只说"太远看不清、不要推近"：**不给它任何"头该朝哪"的暗示**，
+                # 头朝向由取景句的 `frame-right` 单独决定。
+                bits.append(f"{sig}（too small to read at this distance — do not zoom in）")
         for lock in (c.get("positive_locks") or []):
             bits.append(str(lock))
         if bits:
             who.append("，".join(bits))
     # ── ③ 重要：道具 ──
     props = [f"道具：{pr.get('name','')}" for pr in assets["props"] if pr.get("name")]
-    # ── ④ 可压：场景（只取中文 GEO 的头两条：场地与坐标系）──
+    # ── ④ 可压：场景 ──
+    # ⚠️ **只取"画面里看得见"的条目**，把技术性坐标挡在外面。
+    # 2026-09-21 模型审计指出的真问题：`坐标系 = x 向东为正…原点 = …交点`（约 60 字）
+    # **对 t2i 静帧没有任何构图作用**，却占掉字数预算 ——
+    # 而预算被占的直接后果是**取景句里的环卫工人分句被挤掉**，
+    # 于是画面里只剩「全场无行人（远处一名环卫工人）」这种自相矛盾的说法。
+    # 坐标与米数是给 H3 的行文用的（那边要求 GEO 逐字），**t2i 不需要**。
     sc_bits = []
     if geo_cn:
-        head = [ln.strip("— ").strip() for ln in geo_cn.splitlines()
-                if ln.strip().startswith("—")]
-        sc_bits = head[:2]
-    scene_line = ("场景：" + "；".join(sc_bits) + "。") if sc_bits else ""
+        for ln in geo_cn.splitlines():
+            raw = ln.strip()
+            # 只认 `—` 开头的**条目行** —— 标题行（`GEO SPATIAL LAYOUT（…`）不是场景内容，
+            # 混进来会拼出「场景：GEO SPATIAL LAYOUT（全镜头锁定；场地 = …」这种半截括号（实测）
+            if not raw.startswith("—"):
+                continue
+            t = raw.strip("— ").strip()
+            if not t or t.startswith("**"):        # 续行（如「南侧没有路灯」）跳过
+                continue
+            # 头一个分句（到第一个 `，`、`；` 或 `：` 为止）＝ 画面里是什么
+            head = re.split(r"[，；;：]", t)[0].strip()
+            if not head:
+                continue
+            # 技术性条目：坐标系／原点／米数／锚点／屏幕方向
+            if re.search(r"坐标系|原点|锚点|屏幕方向|±|\d+\s*m\b|x\s*[−-]|y\s*[−+]", head):
+                continue
+            # ⚠️ 去掉 Markdown 强调符 —— 那是**给人读的标记**，不该进提示词
+            # （GEO 文件里写的是 `**东西向城市街道**`；实测它原样漏进了提示词）
+            head = re.sub(r"\*+", "", head)
+            sc_bits.append(head)
+        sc_bits = sc_bits[:3]
+    # 「全场无行人（远处一名环卫工人）」自相矛盾 → 说不矛盾的那一句
+    scene_line = ""
+    if sc_bits:
+        scene_line = "场景：" + "；".join(sc_bits) + "。"
+        if "无行人" in scene_line and "环卫" in scene_line:
+            scene_line = re.sub(r"全场无行人（[^）]*）", "街上没有别的行人", scene_line)
+            scene_line = re.sub(r"全场无行人", "街上没有别的行人", scene_line)
+    # ⚠️ **取景句里已经说过的，场景行不重复**（重复占预算不增信息）。
+    # 但"凌晨四点"是**必要的时间信息**（否则模型可能画成白天），取景句没有它时要补。
+    if scene_line and "凌晨四点" not in scene_line and "四点半" not in scene_line:
+        scene_line = scene_line.rstrip("。") + "，凌晨四点。"
     tail = "画面里是干净的无字画面。"
 
     floor = (rules.get("style_ratio_min") or {}).get("t2i", 0.2)
@@ -2207,8 +2307,21 @@ def build_h3_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
         line = f"<Subject {i}> is {c.get('name','')}"
         if c.get("costume"):
             line += f", wearing {c['costume']}"
+        # ⚠️ **身份锚（签名标记）在这一镜可见吗？**
+        # 2026-09-21 模型审计指出的真矛盾：GEO 把签名标记写成
+        # 「Identity anchor that must be visible: 左眉外端上方一道旧疤」，
+        # 而这一镜是 **24mm 全景、机位固定、不许转头也不许推近** ——
+        # 那个疤**物理上不可见**。要求"必须可见"等于逼模型改机位。
+        # → 判据：**能看见才要求看见**；看不见就写明它在本镜镜外，
+        #   并说明"不要为了露出它而改变机位或景别"。
         if c.get("signature"):
-            line += f". Identity anchor that must be visible: {c['signature']}"
+            if shot.get("signature_visible", True):
+                line += f". Identity anchor that must be visible: {c['signature']}"
+            else:
+                line += (f". His identity anchor ({c['signature']}) is NOT VISIBLE in "
+                         f"this shot: the framing is fixed and wide, his face is too "
+                         f"small and turned away from the lens. Do NOT move the camera, "
+                         f"zoom in or turn his head in order to reveal it.")
         for lock in (c.get("positive_locks") or []):
             line += f". He is {lock}"
         ev = (texts.get("subject_evolution") or {}).get(c.get("id"))
@@ -2322,6 +2435,21 @@ VO 原文（同样由程序写）：
 
 ## 硬约束
 - `action_timeline` **必须覆盖整段时长并且结尾收住**（旧线就因为没给时间预算，7.29 秒全花在开头动作上、结尾还在动）。
+- **机位是固定的**（`framing_en` 写的是 static）：**不许写任何运镜**（推／拉／摇／移）。
+- **动作不许自相矛盾**：同一个人在这一镜里的位移方向必须**前后一致**。
+  2026-09-21 实测的事故：模型写了「4.0–6.0s 继续滑向画面右」紧接着又写
+  「6.0–7.0s 减速停在画面左侧」—— 固定机位下他不可能既向右走又停在左边。
+  写法：**先定死这一镜的位移方向（照 `framing_en` 与 GEO 的 screen direction rule），
+  再写速度变化**；收尾要么「继续向同一方向」要么「在到达处停住」，不许折返。
+- **道具与光源不许自相矛盾**：写某件东西之前先看 GEO 里有没有它、怎么写它的。
+  （2026-09-21 实测：GEO 里已经写明本场**没有手机**，模型仍按旧版 GEO 写了发光的手机屏。）
+- **动作里只许出现「资产清单 + `<Subject N>` 定义」里有的东西，件数也不许变。**
+  2026-09-21 实测事故：模型把闫清写成「只出现在画面**右**缘」，而 GEO 的方位锁写的是
+  他在 WEST ＝ 画面**左**（摊主在 EAST ＝ 画面右）—— **同一镜里两条指令互斥**，
+  模型审计判 blocking。**方位是锁定件，不是创作自由**；写之前先读 GEO 那一行。
+  2026-09-21 实测：模型写了「把第二捆肉靠上去」，而资产清单只登记了**一件**五十斤肉，
+  于是凭空多出一件未登记的道具（模型审计判 blocking）。
+  「驮满」这类**程度词不是"多几件"的许可** —— 用同一件做「压平／勒紧」同样能表达。
 - `dialogue_speaker` 的序号要对应上面 assets 里 characters 的顺序（第 1 个 = 1）。
   **VO 是画外音，不要在 dialogue_speaker 里给它编号** —— 程序会自己写。
 - 戏里没写的东西**一个字都不许加**。特别是：不许给猪加悲鸣、不许配乐变调、不许加旁白。
