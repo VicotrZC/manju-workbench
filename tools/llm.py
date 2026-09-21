@@ -64,10 +64,18 @@ KEY_FILE = ROOT / "llm_key.txt"          # .gitignore 挡着
 QUEUE = ROOT / ".work" / "llm_queue"     # file 后端的收件箱
 
 DEFAULTS = {
-    # OpenCode Zen：OpenAI 兼容网关（地址已核实，见 pipeline/docs/07 §五）
-    "base_url": "https://opencode.ai/zen/v1",
-    "model": "deepseek-v4-flash-free",
+    # ⚠️ **OpenCode Go 与 OpenCode Zen 是两个产品，端点不同：**
+    #   Go（$10/月订阅）     → https://opencode.ai/zen/go/v1    ← 我们用这个
+    #   Zen（按 token 现付） → https://opencode.ai/zen/v1
+    # 2026-09-21 实测教训：配成 Zen 的地址时 `/models` 能通（目录公开），
+    # 但 `/chat/completions` 报 `CreditsError: Insufficient balance` ——
+    # **Go 的订阅额度不走 Zen 的余额**。看着像"余额不足"，其实是打错了网关。
+    "base_url": "https://opencode.ai/zen/go/v1",
+    "model": "deepseek-v4.1-flash",
     "backend": "api",          # api = 直接发 HTTP；file = 写进队列等外部填答
+    # Go 要求客户端「为每个会话发一个稳定的 session id，以便优化路由与提示缓存」。
+    # 每轮换 id 会丢掉缓存，所以给一个固定的；要分会话就传 session=…
+    "session": "manju-workbench",
     "temperature": 0.3,
     "max_tokens": 8000,
     "timeout_s": 600,
@@ -104,19 +112,29 @@ def api_key() -> str:
         f"  配置（base_url / model）在 {CONFIG_FILE.name}")
 
 
-def _headers(key: str) -> dict:
+def _headers(key: str, session: str | None = None) -> dict:
     """请求头。
 
-    ⚠️ **User-Agent 不能省。** urllib 默认发 `Python-urllib/3.x`，
-    OpenCode Zen 前面的 Cloudflare 会直接 403（实测 `error code: 1010`，
-    那是按浏览器签名拦的，跟密钥无关）。
+    ⚠️ **两条都不能省**，它们不是可选项：
+
+    1. **User-Agent 必须是"自己的客户端名"**。urllib 默认发 `Python-urllib/3.x`，
+       会被 Cloudflare 直接 403（实测 `error code: 1010`，按浏览器签名拦，与密钥无关）；
+       而 OpenCode Go 的文档也明确要求「用自己的 user agent 标识自己，
+       而不是通用 SDK / HTTP 库的名字」。
+    2. **`x-opencode-session`**：Go 要求「为每个会话发一个稳定的 session id，
+       以便优化路由与提示缓存」。文档里 **DeepSeek Harness 被列为"已知有问题的客户端"**
+       —— 正是因为它有些模型路径没发这个头。所以这里我们自己发。
     """
-    return {
+    h = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {key}",
         "User-Agent": "manju-workbench/1.0 (+tools/llm.py)",
         "Accept": "application/json",
     }
+    s = (session or load_config().get("session") or "").strip()
+    if s:
+        h["x-opencode-session"] = s
+    return h
 
 
 def _post(url: str, payload: dict, key: str, timeout: int) -> dict:
@@ -194,11 +212,20 @@ def _chat_via_api(messages: list[dict], cfg: dict, temperature, max_tokens,
             res = _post(url, payload, key, cfg["timeout_s"] if timeout is None else timeout)
             ch = (res.get("choices") or [{}])[0]
             msg = ch.get("message") or {}
-            txt = msg.get("content") or ""
-            if not txt and msg.get("reasoning_content"):
-                txt = msg["reasoning_content"]        # 推理模型兜底
+            txt = (msg.get("content") or "").strip()
             if not txt:
-                raise LLMError(f"返回里没有正文：{json.dumps(res, ensure_ascii=False)[:400]}")
+                # ⚠️ **不许静默拿 reasoning_content 当正文。**
+                # 2026-09-21 实测：deepseek-v4.1-flash 是推理模型，max_tokens 给小了
+                # 会被思考吃光，正文为空。旧版在这里兜底返回思考文本 ——
+                # 于是 `chat_json` 会拿**思考过程**去解 JSON，可能得到一个
+                # 看起来合理但是错的结构。**那比报错危险得多。**
+                r = (msg.get("reasoning_content") or "").strip()
+                raise LLMError(
+                    "模型返回的正文是空的"
+                    + ("（只有 reasoning_content，长度 %d）" % len(r) if r else "")
+                    + "。\n推理模型（如 deepseek-v4.1-flash）的思考会占 max_tokens ——"
+                      "\n把 llm_config.json 的 max_tokens 调大，或把 max_tokens 参数传给 chat()。"
+                    + (f"\n思考开头：{r[:200]}" if r else ""))
             return txt
         except LLMError as e:
             last = e
@@ -330,7 +357,10 @@ def main() -> int:
     if a.cmd == "ping":
         try:
             t0 = time.time()
-            out = chat([{"role": "user", "content": "只回复两个字：通了"}], max_tokens=20)
+            # ⚠️ max_tokens 不能给小：deepseek-v4.1-flash 是**推理模型**，
+            # 思考单独计费在 reasoning_content 里，但同样吃 max_tokens。
+            # 给 20 会让正文被挤空（实测）。
+            out = chat([{"role": "user", "content": "只回复两个字：通了"}], max_tokens=2000)
             print(f"✅ 通道正常（{time.time()-t0:.1f}s）：{out.strip()}")
             return 0
         except LLMError as e:

@@ -2,13 +2,14 @@
   "_about": [
     "**模型通道配置。本文件进 git，里面没有密钥。**",
     "密钥放仓库根的 llm_key.txt（.gitignore 已挡），或环境变量 LLM_API_KEY。",
-    "判据与用法见 tools/llm.py 顶部与 pipeline/docs/07_管线.md §五。",
     "",
-    "base_url 是 **OpenCode Zen**（OpenAI 兼容网关），地址经核实。",
-    "model 的 id 是**从端点自己拉出来的**（`python tools/llm.py models`，74 个），",
-    "不是猜的：列表里确实有 deepseek-v4.1-flash。"
+    "⚠️ 2026-09-21 更正：用户用的是 **OpenCode Go（\\/月订阅）**，不是 Zen（按量现付）。",
+    "   两者端点不同 —— Go 是 https://opencode.ai/zen/go/v1，Zen 是 https://opencode.ai/zen/v1。",
+    "   配错时现象很误导：/models 能通（目录公开），/chat/completions 报 CreditsError，",
+    "   看着像余额不足，其实是打错网关。",
+    "也见 tools/llm.py 顶部与 pipeline/docs/07_管线.md §五。"
   ],
-  "base_url": "https://opencode.ai/zen/v1",
+  "base_url": "https://opencode.ai/zen/go/v1",
   "model": "deepseek-v4.1-flash",
   "_backend_about": [
     "api  = 直接 HTTP POST 到模型（生产）",
@@ -17,6 +18,11 @@
   ],
   "backend": "api",
   "temperature": 0.3,
-  "max_tokens": 8000,
-  "timeout_s": 600
+  "max_tokens": 16000,
+  "timeout_s": 600,
+  "session": "manju-workbench",
+  "_max_tokens_about": [
+    "deepseek-v4.1-flash 是**推理模型**，思考也占 max_tokens。",
+    "给小了会出现「正文为空、只有 reasoning_content」——程序会直接报错，不拿思考当答案。"
+  ]
 }
