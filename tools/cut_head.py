@@ -128,6 +128,11 @@ def cut_one(src: Path, out_dir: Path, ratio: float, cut: float,
 
     out = im.crop((0, cut_y, im.width, bottom + 1))
     out_dir.mkdir(parents=True, exist_ok=True)
+    # ⚠️ 2026-09-21：我一度以为这里该是 `"__nohead.png"`（双下划线）——
+    # **错了，实测纠正**：ComfyUI 出的图文件名本身以 `_` 结尾（`…_00004_.png`），
+    # 所以 `stem + "_nohead.png"` 拼出来正好是锁定件登记的 `…_00004__nohead.png`。
+    # 改成双下划线反而会拼出**三个**下划线，与 `audit_rules.json` 对不上。
+    # **原样是对的，不要改。**（教训：先看真实输出名再下结论。）
     dest = out_dir / (src.stem + "_nohead.png")
     out.save(dest)
 
