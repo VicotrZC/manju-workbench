@@ -270,16 +270,109 @@ def test_multi_scene():
               sorted(scope_union - all_beats), [])
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  资产接线判据 CHAIN-03（**负向样例：纯 t2i 的首帧必须被拦下**）
+# ══════════════════════════════════════════════════════════════════════
+def test_asset_wiring():
+    """用户 2026-09-21 拍板「首帧必须用参考图，不然漂移非常严重」，
+    `CHAIN-03` 就是那句话的机器判据。
+
+    **这条测试的由来**（用户实测发现，不是我自己想到的）：
+
+    > 角色身份卡不用、电动车的资产没有生成，你就凭空生成了，而且还过了门禁。
+
+    根因：在 `CHAIN-03` 之前，**没有任何检查器问过**
+    「镜头声明了资产，工作流到底有没有把资产读进去」——
+    审计只审提示词文本，于是「用嘴说用了 CHR-01」也算过。
+    """
+    print("\n── 资产接线：CHAIN-03（负向样例）──")
+    import json
+    import shutil
+    import tempfile
+
+    import pipeline_audit as PA
+
+    src = Path("projects") / "美食：全市巡摆，馋哭食客"
+    if not src.exists():
+        print("  ⏭  项目不在，跳过")
+        return
+
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td) / "proj"
+        tmp.mkdir()
+        for f in ("audit_rules.json", "项目卡.md"):
+            if (src / f).exists():
+                shutil.copy2(src / f, tmp / f)
+        # ⚠️ **`script/` 必须一起复制。** 2026-09-21 实测踩到：
+        # 少了它 → `check_chain` 报 CHAIN-01「剧本层文件缺失」→ **chain 的 shots 变成空表**
+        # → `check_workflow` 认不出这是哪一镜 → `is_first_frame_wf` 为假
+        # → **CHAIN-03 整条静默不跑**，测试报"没抓到"，看起来像判据坏了。
+        # 又一次「测试自己写错，比判据坏了更难发现」（见 test_multi_scene 的同类教训）。
+        for sub in ("script", "storyboard", "workflows", "assets"):
+            if (src / sub).is_dir():
+                shutil.copytree(src / sub, tmp / sub)
+        rules = PA.load_rules(tmp)
+        rel = PA.table_for_workflow(tmp, rules, "FF_EP02SC02_S00")
+        _crep, chain = PA.check_chain(tmp, rules, materials="pending", table_rel=rel)
+
+        def c3(rules_now=None):
+            rep, _ = PA.check_workflow(tmp, "FF_EP02SC02_S00", rules_now or rules, chain)
+            return [i for i in rep.items if i["code"] == "CHAIN-03"]
+
+        # ── 负向样例 1：真实那条工作流是纯 t2i（没有 LoadImage）──
+        got = c3()
+        check("纯 t2i 首帧 → 「没有任何参考图输入」报出来",
+              any("没有任何参考图输入" in i["msg"] for i in got), True)
+
+        # ── 负向样例 2：声明了、但没登记进锁定件的资产 ──
+        # （PRP-02 小电驴 / SCN-02 空街场景 —— 两个资产图都还没出）
+        check("未登记的资产 PRP-02 → 报出来",
+              any("PRP-02" in i["msg"] and "没有登记" in i["msg"] for i in got), True)
+        check("未登记的资产 SCN-02 → 报出来",
+              any("SCN-02" in i["msg"] and "没有登记" in i["msg"] for i in got), True)
+
+        # ── 正向样例：把参考图接进去，「没有任何参考图输入」必须消失 ──
+        # **只测这一条会消失**，不断言"一个错都没有" ——
+        # 工作流内容本身的问题不该把这条判据的测试染红
+        # （失败原因必须指向被测的那件事）。
+        wf_p = tmp / "workflows" / "FF_EP02SC02_S00.json"
+        wf = json.loads(wf_p.read_text(encoding="utf-8"))
+        wf["nodes"].append({"id": 900, "type": "LoadImage",
+                            "widgets_values": ["CHR01_body_neutral_00004__nohead.png", "image"]})
+        wf_p.write_text(json.dumps(wf, ensure_ascii=False, indent=2), encoding="utf-8")
+        got2 = c3()
+        check("接进参考图后 → 「没有任何参考图输入」消失",
+              any("没有任何参考图输入" in i["msg"] for i in got2), False)
+        check("读的正是 CHR-01 的图 → 不再报「CHR-01 没被读」",
+              any("CHR-01" in i["msg"] and "没有读" in i["msg"] for i in got2), False)
+
+        # ── 负向样例 3：登记了资产，但一张图都没有（files 为空）──
+        # 这是最坏的一种静默：清单写了 why、S5 记了待产出，**唯独门禁说通过**。
+        r2 = json.loads(json.dumps(rules))
+        r2.setdefault("props", {})["PRP-02"] = {"name": "小电驴（闫清代步电动车）", "files": []}
+        (tmp / "audit_rules.json").write_text(
+            json.dumps(r2, ensure_ascii=False, indent=2), encoding="utf-8")
+        got3 = c3(r2)
+        check("登记了但 files 为空 → 记 PENDING（「还没做」不是「做错了」）",
+              any(i["level"] == "PENDING" and "PRP-02" in i["msg"] for i in got3), True)
+        crep2, _ = PA.check_chain(tmp, r2, materials="error", table_rel=rel)
+        check("CHAIN-02：files 为空 → 报「一张资产图都没有」",
+              any(i["code"] == "CHAIN-02" and "一张资产图都没有" in i["msg"]
+                  for i in crep2.items), True)
+
+
 def main() -> int:
     print("自测 —— 拿已知的坏样例打自己的检查器")
-    print("[1/4] extract_json …", flush=True)
+    print("[1/5] extract_json …", flush=True)
     test_extract_json()
-    print("[2/4] PENDING …", flush=True)
+    print("[2/5] PENDING …", flush=True)
     test_pending()
-    print("[3/4] 镜头表判据 …", flush=True)
+    print("[3/5] 镜头表判据 …", flush=True)
     test_shot_table_rules()
-    print("[4/4] 多场次判据（负向样例）…", flush=True)
+    print("[4/5] 多场次判据（负向样例）…", flush=True)
     test_multi_scene()
+    print("[5/5] 资产接线 CHAIN-03（负向样例）…", flush=True)
+    test_asset_wiring()
     print("\n" + "─" * 60)
     if FAILED:
         print(f"❌ {len(FAILED)} 项没过：")

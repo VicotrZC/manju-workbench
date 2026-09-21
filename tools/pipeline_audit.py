@@ -737,9 +737,28 @@ def check_chain(proj: Path, rules: dict, materials: str = "error",
                           "上一镜的提示词没留档就丢了 —— 跑 sync-prompts 先归档")
 
     # ── 资产先于分镜（01_资产规范 §〇 铁律：无图不进分镜）──
-    for key in ("characters", "scenes"):
+    #
+    # ⚠️ 2026-09-21 修两个**静默通过的洞**。用户实测指出：
+    #    「角色身份卡不用、电动车的资产没有生成，你就凭空生成了，而且还过了门禁。」
+    #   ① 原来只遍历 `("characters", "scenes")` —— **`props` 从来不在里面**。
+    #      而 PRP-01（摊主的手机）/ PRP-02（小电驴）正是**道具**，
+    #      于是门禁**永远看不见它们**：登记在资产清单里，却不在锁定件里，也没人查。
+    #   ② 原来是 `for f in a.get("files", [])`：**`files` 是空表时循环体一次都不执行**。
+    #      于是「资产已登记，但一张图都没有」——正是"资产图未出"——
+    #      与「资产图齐全」在旧写法下**完全不可区分**。
+    #      这是最坏的一种静默：清单里写了 why、S5 也记了"待产出"，
+    #      **唯独门禁说通过**。
+    for key in ("characters", "props", "scenes"):
         for aid, a in (rules.get(key) or {}).items():
-            for f in a.get("files", []):
+            files = a.get("files") or []
+            if not files:
+                _missing("CHAIN-02",
+                         f"资产 {aid}（{a.get('name','')}）**已登记，但一张资产图都没有**"
+                         f"（audit_rules.json 里 `files` 为空）",
+                         fix="先出这张资产图，再把文件名填进 audit_rules.json 的 files"
+                             " —— 无图不进分镜（01_资产规范 §〇）")
+                continue
+            for f in files:
                 if not (proj / "assets" / f).exists() and not (proj / "outputs" / f).exists():
                     rep.error("CHAIN-02",
                               f"资产 {aid}（{a.get('name','')}）的文件不在位：{f}",
@@ -800,7 +819,8 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                  "→ 场次相关检查 WF-05/07/08/09/09b/10/16/18/20 已跳过")
     elif is_first_frame_wf:
         rep.info("SCOPE-00",
-                 f"这是镜头 {shot.get('id')} 的**首帧工作流**（t2i 静帧）"
+                 f"这是镜头 {shot.get('id')} 的**首帧工作流**（静帧，**必须带参考图**，"
+                 f"由 CHAIN-03 强制）"
                  f"→ 跑画风/身份/否定枚举（WF-02/03/04/07/08/22），"
                  f"跳过与视频有关的 WF-09/09b/10/16/20")
 
@@ -811,6 +831,58 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # 拿"帧数 17k+5""台词落点""确认版本"去要求一张 **t2i 静帧**是荒谬的：
     # 静帧没有帧数、没有说话、没有版本。**会误报的检查器比没有检查器更糟。**
     is_video_wf = is_shot_wf and not is_first_frame_wf
+
+    # ── CHAIN-03：镜头声明的资产，必须**登记在锁定件里**、并且**真的被这条工作流读进去** ──
+    #
+    # 用户 2026-09-21 拍板：**「很明显需要参考图来生成首帧啊，不然漂移非常严重。」**
+    # 这条检查就是那句话的机器判据。
+    #
+    # 在它之前**没有任何检查器问过这个问题**。实测证据（`FF_EP02SC02_S00`）：
+    #   · 节点只有 UNETLoader/CLIPLoader/VAELoader/Lora/CLIPTextEncode×2/
+    #     EmptySD3LatentImage/KSampler/VAEDecode/SaveImage —— **没有 LoadImage**；
+    #   · 提示词里只有七个字「沿用 CHR-01 基础造型」，**模型从没见过 CHR-01 那张图**；
+    #   · 镜头声明了 3 个资产，其中 PRP-02 与 SCN-02 的 `files` 都是空的（图根本没出）；
+    #   · 而审计封条判定是 **pass、blocking 为空** —— 因为它只审提示词文本。
+    # 结果：**凭空生成，还过了门禁**，四版首帧人脸各不相同。
+    if is_first_frame_wf and shot:
+        declared = shot.get("assets") or []
+        loaded = set()
+        for n in nodes:
+            if n.get("type") in ("LoadImage", "LoadImageOutput", "LoadImageMask"):
+                for v in (n.get("widgets_values") or []):
+                    if isinstance(v, str) and v.strip():
+                        loaded.add(Path(v).name)
+
+        if not loaded:
+            rep.error("CHAIN-03",
+                      f"首帧工作流 {wf_name} **没有任何参考图输入**（纯 t2i）"
+                      f"—— 角色与场景必然漂移，这不是「风格问题」",
+                      fix="首帧必须走参考图：LoadImage → FluxKontextImageScale →"
+                          "（TextEncodeQwenImageEditPlus ＋ VAEEncode）→ KSampler.latent_image"
+                          "（规矩.md §10「edit 图的正确接法」）")
+        for aid in declared:
+            a = None
+            for key in ("characters", "props", "scenes"):
+                a = (rules.get(key) or {}).get(aid)
+                if a is not None:
+                    break
+            if a is None:
+                rep.error("CHAIN-03",
+                          f"镜头 {shot.get('id')} 声明了资产 {aid}，但它**在 "
+                          f"audit_rules.json 里没有登记** → 门禁看不见它（CHAIN-02 也不会查它）",
+                          fix=f"把 {aid} 补进 audit_rules.json 的 characters/props/scenes，并填 files")
+                continue
+            files = a.get("files") or []
+            if not files:
+                rep.pending("CHAIN-03",
+                            f"镜头 {shot.get('id')} 声明了资产 {aid}，但它的资产图还没出，"
+                            f"**无从接起**")
+                continue
+            if loaded and not ({Path(f).name for f in files} & loaded):
+                rep.error("CHAIN-03",
+                          f"镜头 {shot.get('id')} 声明了资产 {aid}，但工作流 {wf_name} "
+                          f"**没有读它的任何一张图**（读进来的是：{sorted(loaded)}）",
+                          fix=f"把 {aid} 的图接进 LoadImage")
 
     h3 = h3_nodes(wf)
     lat = [n for n in nodes if n.get("type") in
