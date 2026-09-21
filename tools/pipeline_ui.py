@@ -191,6 +191,25 @@ th{color:var(--dim);font-weight:500}
 .banner{padding:9px 20px;background:#1d232b;border-bottom:1px solid var(--line);
   font-size:13px}
 .banner b{color:var(--fail)}
+.tabs{display:flex;gap:6px;margin-left:auto}
+.tab{padding:6px 14px;border:1px solid var(--line);border-radius:6px;
+  cursor:pointer;background:var(--panel2);font-size:13px}
+.tab.on{background:#2b3644;border-color:#4a5b70;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card2{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:10px;display:flex;flex-direction:column;gap:8px}
+.card2 img{width:100%;border-radius:6px;background:#000;display:block;
+  max-height:400px;object-fit:contain}
+.card2 video{width:100%;border-radius:6px;background:#000;display:block}
+.card2 .cap{font-size:12.5px;font-weight:600;line-height:1.4}
+.meta{font-size:11.5px;color:var(--dim);font-family:ui-monospace,monospace}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;
+  border:1px solid var(--line);margin-right:5px}
+.pill.ok{color:var(--pass);border-color:var(--pass)}
+.pill.bad{color:var(--fail);border-color:var(--fail)}
+.grp{margin:22px 0 10px;font-size:14px;font-weight:600;
+  border-bottom:1px solid var(--line);padding-bottom:6px}
+.grp span{color:var(--dim);font-weight:400;font-size:12px;margin-left:8px}
 </style></head><body>
 <header>
   <h1>漫剧管线</h1>
@@ -200,11 +219,20 @@ th{color:var(--dim);font-weight:500}
   <span class="bar"><i id="bar" style="width:0%"></i></span>
   <span class="sub" id="score">—</span>
   <span class="sub" id="ts"></span>
+  <div class="tabs">
+    <div class="tab on" id="t1" onclick="tab('pipe')">管线</div>
+    <div class="tab" id="t2" onclick="tab('media')">资源与成片</div>
+  </div>
 </header>
 <div class="banner" id="banner">载入中…</div>
-<div class="wrap">
+<div class="wrap" id="vpipe">
   <div class="left" id="list"></div>
   <div class="right" id="detail"><div class="empty">点左边任一阶段看详情</div></div>
+</div>
+<div class="wrap" id="vmedia" style="display:none">
+  <div class="right" id="media" style="padding:18px 22px">
+    <div class="empty">载入中…</div>
+  </div>
 </div>
 <script>
 let STATE=null, SEL=null;
@@ -318,7 +346,63 @@ async function go(stage){
       b.scrollTop=b.scrollHeight; }
   },900);
 }
-$('#scene').addEventListener('change',()=>{SEL=null;load(true);});
+$('#scene').addEventListener('change',()=>{SEL=null;MED=null;load(true);});
+
+// ── 资源与成片 ─────────────────────────────────────────────────────
+let MED=null, TAB='pipe';
+function tab(t){
+  TAB=t;
+  $('#t1').className='tab'+(t==='pipe'?' on':'');
+  $('#t2').className='tab'+(t==='media'?' on':'');
+  $('#vpipe').style.display = t==='pipe'?'flex':'none';
+  $('#vmedia').style.display = t==='media'?'flex':'none';
+  if(t==='media') loadMedia();
+}
+async function loadMedia(){
+  const sc=(STATE&&STATE.scene)?STATE.scene.id:'';
+  $('#media').innerHTML='<div class="empty">载入中…</div>';
+  const r=await fetch('/api/media?scene='+encodeURIComponent(sc));
+  MED=await r.json();
+  if(MED.error){ $('#media').innerHTML='<div class="empty">⛔ '+esc(MED.error)+'</div>'; return; }
+  let h=`<div class="sub" style="margin-bottom:6px">共 ${MED.total} 件 ——
+    点开就能看/能放。<b>审查看这一页</b>；判断好坏只有你能做。</div>`;
+  for(const g of MED.groups){
+    h+=`<div class="grp">${esc(g.title)}<span>${g.items.length} 件</span></div><div class="grid">`;
+    for(const it of g.items) h+=card(it);
+    h+=`</div>`;
+  }
+  $('#media').innerHTML=h;
+}
+function card(it){
+  const src='/media?p='+encodeURIComponent(it.rel);
+  let media = it.kind==='video'
+    ? `<video controls preload="metadata" src="${src}"></video>`
+    : `<a href="${src}" target="_blank"><img loading="lazy" src="${src}" alt=""></a>`;
+  let pills='';
+  if(it.kind==='video'){
+    pills+=`<span class="pill">${it.width}×${it.height}</span>`;
+    pills+=`<span class="pill">${it.frames}帧 / ${it.duration_s}s</span>`;
+    pills+=`<span class="pill">${it.fps}fps</span>`;
+    pills+= it.has_audio
+      ? `<span class="pill ok">音轨 ${it.audio_sample_rate}Hz</span>`
+      : `<span class="pill bad">无音轨</span>`;
+    if(it.qc_fail&&it.qc_fail.length)
+      pills+=`<span class="pill bad">合规 ${it.qc_fail.length} 项不过</span>`;
+    else if(it.qc_pass)
+      pills+=`<span class="pill ok">机械合规 ${it.qc_pass} 项过</span>`;
+  } else if(it.w){
+    pills+=`<span class="pill">${it.w}×${it.h}</span>`;
+  }
+  if(it.shot) pills+=`<span class="pill">${it.shot}</span>`;
+  if(it.kind==='video'&&it.expect_frames&&it.frames!==it.expect_frames)
+    pills+=`<span class="pill bad">与镜头表不符（应 ${it.expect_frames} 帧）</span>`;
+  const fails=(it.qc_fail||[]).map(x=>`<div class="meta" style="color:var(--fail)">· ${esc(x)}</div>`).join('');
+  return `<div class="card2">${media}
+    <div class="cap">${esc(it.label)}</div>
+    <div>${pills}</div>
+    <div class="meta">${esc(it.rel)}<br>${(it.size/1048576).toFixed(2)} MB · ${it.mtime}</div>
+    ${fails}</div>`;
+}
 load(false);
 </script></body></html>
 """
@@ -363,11 +447,82 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
                           "application/json; charset=utf-8")
 
+    # ── 把项目里的图/视频发给浏览器（**审查要看的东西**）──────────────
+    def _media(self):
+        q = parse_qs(urlparse(self.path).query)
+        rel = (q.get("p", [""])[0]).replace("\\", "/").lstrip("/")
+        f = (self.proj / rel).resolve()
+        root = self.proj.resolve()
+        # **只发项目目录里的文件** —— 挡路径穿越（../ 之类）
+        if not str(f).startswith(str(root)) or not f.is_file():
+            return self._send(404, b"not found", "text/plain")
+        ctype = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                 ".webp": "image/webp", ".gif": "image/gif",
+                 ".mp4": "video/mp4", ".webm": "video/webm"}.get(
+                     f.suffix.lower(), "application/octet-stream")
+        size = f.stat().st_size
+        # **Range 必须支持**，否则 <video> 拖不动进度条
+        rng = self.headers.get("Range") or ""
+        start, end = 0, size - 1
+        partial = False
+        if rng.startswith("bytes="):
+            spec = rng[6:].split(",")[0].strip()
+            a, _, b = spec.partition("-")
+            try:
+                if a:
+                    start = int(a)
+                    end = int(b) if b else size - 1
+                elif b:                       # bytes=-N 末尾 N 字节
+                    start = max(0, size - int(b))
+                partial = True
+            except ValueError:
+                start, end = 0, size - 1
+                partial = False
+        end = min(end, size - 1)
+        if start > end or start >= size:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.end_headers()
+            return
+        length = end - start + 1
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        with open(f, "rb") as fh:
+            fh.seek(start)
+            left = length
+            while left > 0:
+                chunk = fh.read(min(262144, left))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionAbortedError):
+                    return
+                left -= len(chunk)
+
     def do_GET(self):
         u = urlparse(self.path)
         if u.path == "/":
             html = PAGE.replace("__PROJ__", self.proj.name)
             return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+        if u.path == "/media":
+            return self._media()
+        if u.path == "/api/media":
+            q = parse_qs(u.query)
+            scene = (q.get("scene", [None])[0]) or self.scene
+            try:
+                rules = P.PA.load_rules(self.proj)
+                data = P.collect_media(self.proj, rules,
+                                       P.pick_scene(self.proj, rules, scene))
+            except SystemExit as exc:
+                data = {"error": str(exc)}
+            return self._json(data)
         if u.path == "/api/state":
             q = parse_qs(u.query)
             scene = (q.get("scene", [None])[0]) or self.scene

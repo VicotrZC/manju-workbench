@@ -1414,11 +1414,122 @@ def _gen_verdicts(proj: Path, rules: dict, scene: dict, rounds: int) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  审查用的物料清单（给可视化界面用）
+# ══════════════════════════════════════════════════════════════════════
+def _mtime(p: Path) -> str:
+    return datetime.fromtimestamp(p.stat().st_mtime).strftime("%m-%d %H:%M")
+
+
+def collect_media(proj: Path, rules: dict, scene: dict) -> dict:
+    """把这一场**要看的东西**分组列出来：成片镜头 / 首帧 / 角色资产 / 场景资产 / 画风样张。
+
+    **只列文件、只读尺寸与时长，不做任何判断。** 判断是人的事（规矩 §5.C 第 11 条）。
+    每一条都带 `rel`（相对项目根），界面用 `/media?p=<rel>` 取原文件。
+    """
+    qc = {}
+    qf = proj / "review" / f"{scene['id']}_合规检查.json"
+    if qf.exists():
+        try:
+            for c in (json.loads(read(qf)).get("checks") or []):
+                qc.setdefault(c.get("shot"), []).append(c)
+        except ValueError:
+            pass
+
+    def item(p: Path, label: str, **extra) -> dict:
+        d = {"label": label, "rel": str(p.relative_to(proj)).replace("\\", "/"),
+             "name": p.name, "size": p.stat().st_size, "mtime": _mtime(p),
+             "kind": "video" if p.suffix.lower() in (".mp4", ".webm", ".mov") else "image"}
+        if d["kind"] == "image":
+            sz = PA.image_size(p)
+            d["w"], d["h"] = (sz if sz else (None, None))
+        else:
+            try:
+                info = probe_mp4(p)
+                d.update({k: info.get(k) for k in
+                          ("duration_s", "width", "height", "frames", "fps",
+                           "has_audio", "audio_sample_rate", "audio_channels")})
+            except Exception:                       # noqa: BLE001
+                pass
+        d.update(extra)
+        return d
+
+    groups: list[dict] = []
+
+    # ① 成片镜头 —— **审查的主战场**
+    shots = []
+    for s in (scene.get("t") or {}).get("shots") or []:
+        sid = s.get("id")
+        hits = sorted((proj / "outputs").glob(f"*{sid}*.mp4"),
+                      key=lambda p: p.stat().st_mtime, reverse=True)
+        for i, p in enumerate(hits):
+            bad = [c for c in qc.get(sid, []) if c.get("result") == "fail"]
+            shots.append(item(p, f"{sid}　{s.get('content','')}"
+                                 + ("" if i == 0 else f"（旧版 {i}）"),
+                              shot=sid, beats=s.get("beats"),
+                              expect_frames=s.get("frames"),
+                              expect_canvas=rules.get("canvas"),
+                              qc_fail=[f"{c['item']}：{c['got']}" for c in bad],
+                              qc_pass=sum(1 for c in qc.get(sid, [])
+                                          if c.get("result") == "pass"),
+                              is_current=(i == 0)))
+    if shots:
+        groups.append({"id": "shots", "title": "成片镜头（审查主战场）", "items": shots})
+
+    # ② 首帧 —— 画风与身份是它定的
+    ff = []
+    for s in (scene.get("t") or {}).get("shots") or []:
+        sid, name = s.get("id"), (s.get("first_frame") or "")
+        cands = []
+        if name:
+            cands = [proj / "assets" / name, proj / "outputs" / name,
+                     proj / "storyboard" / name]
+        cands += sorted((proj / "outputs").glob(f"*{sid}*.png"))
+        seen = set()
+        for p in cands:
+            if p.exists() and p not in seen:
+                seen.add(p)
+                ff.append(item(p, f"{sid} 首帧", shot=sid,
+                               registered=bool(name and p.name == name),
+                               registered_name=name or None))
+    if ff:
+        groups.append({"id": "firstframes", "title": "首帧（成片画风由它决定）",
+                       "items": ff})
+
+    # ③ 画风样张
+    st = [item(p, p.stem) for p in sorted((proj / "outputs").glob("style_*.png"))]
+    if st:
+        groups.append({"id": "style", "title": "画风样张（选定的是 style_I_H_mature）",
+                       "items": st})
+
+    # ④ 角色／场景资产
+    for gid, title, d in (("chr", "角色资产", proj / "assets" / "CHR"),
+                          ("scn", "场景资产", proj / "assets" / "SCN")):
+        if d.is_dir():
+            its = [item(p, p.stem) for p in sorted(d.glob("*"))
+                   if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")]
+            if its:
+                groups.append({"id": gid, "title": title, "items": its})
+
+    # ⑤ 还没归类的产物，别让东西"看不见"
+    known = {i["rel"] for g in groups for i in g["items"]}
+    rest = [item(p, p.stem) for p in sorted((proj / "outputs").glob("*"))
+            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".mp4")
+            and str(p.relative_to(proj)).replace("\\", "/") not in known]
+    if rest:
+        groups.append({"id": "other", "title": "其他产物", "items": rest[:60]})
+
+    return {"scene": scene["id"], "groups": groups,
+            "counts": {g["id"]: len(g["items"]) for g in groups},
+            "total": sum(len(g["items"]) for g in groups)}
+
+
+# ══════════════════════════════════════════════════════════════════════
 def main() -> int:
     ap = argparse.ArgumentParser(description="漫剧制作管线（阶段状态机 + 程序兜底）")
     ap.add_argument("cmd", choices=["stages", "scenes", "status", "gate", "verify",
                                     "brief", "seal", "ui", "json", "qc", "run",
-                                    "scaffold", "probe", "audit-all", "seal-all", "gen"])
+                                    "scaffold", "probe", "audit-all", "seal-all",
+                                    "gen", "media"])
     ap.add_argument("project")
     ap.add_argument("target", nargs="?", help="阶段 id / 文件（gate/brief/seal/gen 用）")
     ap.add_argument("verdict", nargs="?", help="seal 用：判定 JSON")
@@ -1461,6 +1572,12 @@ def main() -> int:
         if not a.target:
             ap.error("gen 需要阶段 id（S2 / S4 / S7）")
         return cmd_gen(proj, a.target, a.scene, a.rounds)
+
+    if a.cmd == "media":
+        rules = PA.load_rules(proj)
+        print(json.dumps(collect_media(proj, rules, pick_scene(proj, rules, a.scene)),
+                         ensure_ascii=False, indent=2))
+        return 0
 
     if a.cmd == "stages":
         print(f"{'阶段':<6}{'名称':<24}{'执行者':<8}封条  说明")
