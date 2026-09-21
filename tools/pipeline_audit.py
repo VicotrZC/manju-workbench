@@ -1295,6 +1295,11 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
                       f"prompts/{sid}.prompt.md 与工作流里的提示词**不一致**（有一边被改过）",
                       fix="两边必须一致；改哪边都要同步另一边，否则审计的是旧版")
 
+    # ── LIC-01/02/03 模型许可证登记 ──
+    # **对每条工作流都跑，不分 t2i / 视频** —— 许可证跟"是不是镜头工作流"无关，
+    # 画风探针（STYLE_*）、资产图（CHR*、PRP*）用的也是同一批权重。
+    license_hit = check_license(rep, nodes)
+
     packet = {
         "project": proj.name,
         "subject": wf_name,
@@ -1316,6 +1321,8 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
         # 两项**无法核对**」—— 而那两项恰恰是这一镜能不能跑出来的关键。
         # 模型看不到文件系统，**程序不主动给的事实它就核不了**。
         "workflow_facts": _workflow_facts(wf, nodes),
+        # 许可证核对结果（给审计员看"程序核过哪几个模型"）
+        "license": license_hit,
     }
     return rep, packet
 
@@ -1357,6 +1364,139 @@ def _workflow_facts(wf: dict, nodes: list) -> dict:
         if n:
             facts[t] = n.get("widgets_values")
     return facts
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  LIC-01：模型许可证登记（2026-09-21 新增）
+#
+#  为什么要有这条（**这是我漏了很久的一条**）：
+#  `07_管线.md` §五 一直写着「抄之前先核 license 与来源」，但**那只是一句话** ——
+#  没有表、没有检查。结果是项目跑了一个多月，**工作流里加载的 11 个模型权重
+#  一个都没登记过**。用户问「Qwen-Image 2.1 是不是不能商用」时才发现，
+#  而且查出来的第一个事实是：**能给答案的那份登记根本不存在**。
+#
+#  一句话的规矩等于没有规矩。这条把它变成程序判据。
+#
+#  真正的风险不是"用了受限模型"，是**用了却不知道** ——
+#  Qwen-Image-2512 是 apache-2.0，而 Qwen-Image-2.1 是 qwen-research（限研究/评估）。
+#  名字这么像、同厂同系列，**靠人记必错**。
+# ══════════════════════════════════════════════════════════════════════
+
+# 会被扫的加载器节点 → 模型文件名在 widgets_values[0]
+LICENSE_LOADER_NODES = {
+    "UNETLoader", "UnetLoaderGGUF", "UnetLoaderGGUFAdvanced",
+    "CLIPLoader", "DualCLIPLoader", "TripleCLIPLoader",
+    "VAELoader", "LoraLoader", "LoraLoaderModelOnly",
+    "CheckpointLoaderSimple", "CheckpointLoader",
+}
+
+
+def _blocked_match(reg: dict, filename: str) -> dict | None:
+    """文件名是否命中 `blocked` 名单。
+
+    ⚠️ **这里第一版写错了，记下来**（2026-09-21，写完第一次真跑就抓到）：
+
+    第一版直接把 `match` 当正则：`re.search("qwen_image_2.1", f, re.I)`。
+    而 `qwen_image_2.1` 里的 **`.` 在正则里是"任意字符"** ——
+    于是它把 **`qwen_image_2512_fp8_e4m3fn.safetensors` 也判成了受限模型**，
+    在**每一条首帧工作流上误报 LIC-03**。
+
+    这类误报的后果不是"多报一条"，是**人会去把检查关掉** —— 那比没有检查更糟。
+    教训：**拿用户写的字符串当正则用，必须先转义**；转义了还不够，
+    还要防止 `2.1` 匹配到 `2512` 里的 `2`（见下）。
+
+    判据改为：把 `.` `-` `_` 一律并入分隔符类，并要求**两边都是分隔符或边界**。
+    这样 `qwen_image_2.1` 能匹配 `Qwen-Image-2.1`，
+    **但匹配不到 `qwen_image_2512`**（`1` 后面跟的是 `2`，不是分隔符）。
+
+    **宁漏勿误**：`qwen_image_21`（连点都不写）也匹配不到 —— 这算漏报。
+    漏报被 `LIC-01` 兜住（文件名对不上任何登记项就是未登记，照样 ERROR）；
+    而误报会让人关掉检查。**漏报有网，误报没有。**
+    """
+    SEP = r"[\s._\-]"
+    for b in reg.get("blocked") or []:
+        pat = (b.get("match") or "").strip()
+        if not pat:
+            continue
+        body = SEP.join(re.escape(tok) for tok in re.split(SEP, pat) if tok)
+        if re.search(rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])", filename, re.I):
+            return b
+    return None
+
+
+def _license_registry() -> dict | None:
+    """读 `tools/license_registry.json`。**文件不在就返回 None**（不许崩）。"""
+    p = ROOT / "tools" / "license_registry.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def check_license(rep: Report, nodes: list) -> dict:
+    """扫工作流里所有模型加载节点，逐个对许可证登记表。
+
+    判据（**故意保持简单** —— 许可跟文件字节无关，不需要哈希）：
+
+    - `LIC-01` **加载了没登记的模型** → ERROR。这是核心：**没登记 = 没人核过**。
+    - `LIC-02` 登记了但 `commercial` 不是 `yes` → WARN（有条件可商用，附条件）。
+    - `LIC-03` 命中 `blocked` 名单（如 `qwen_image_2.1`）→ ERROR。
+    - `LIC-00` 登记表本身不存在 → WARN 一次，**不当 ERROR**（否则整个仓库第一天全部爆红，
+      人就会去把检查关掉 —— 那还不如没有）。
+    """
+    hit: dict = {"checked": 0, "unregistered": [], "conditional": [], "blocked": []}
+    reg = _license_registry()
+    if reg is None:
+        rep.warn("LIC-00", "没有 `tools/license_registry.json`，模型许可证无从核对",
+                 fix="见 pipeline/docs/08_模型许可证.md")
+        return hit
+
+    by_file = {m["file"]: m for m in (reg.get("models") or []) if m.get("file")}
+
+    seen: set[str] = set()
+    for n in nodes:
+        if n.get("type") not in LICENSE_LOADER_NODES:
+            continue
+        wv = n.get("widgets_values") or []
+        if not wv or not isinstance(wv[0], str) or not wv[0].strip():
+            continue
+        f = wv[0].strip()
+        if f in seen:
+            continue
+        seen.add(f)
+        hit["checked"] += 1
+
+        # ── LIC-03：明令禁区。**先判它，命中就短路** ──
+        # ⚠️ 为什么短路：一个未登记的受限模型会同时命中 LIC-03 和 LIC-01，
+        # 于是**一条根因报两条错**，而 LIC-01 给出的"去补登记"建议是**错的** ——
+        # 那个模型本来就不该出现，补登记只会把禁区模型合法化。
+        # 真实工作流上没人会看到，只有负向测试会撞出来；但"修好一条另一条还在"
+        # 正是让人失去信任的那种噪音。
+        b = _blocked_match(reg, f)
+        if b:
+            hit["blocked"].append(f)
+            rep.error("LIC-03", f"加载了受限模型 `{f}`（许可证 {b.get('license')}）",
+                      why=b.get("why"), url=b.get("url"),
+                      fix="换可商用模型；Qwen-Image 系列用 2512 / Edit-2511（apache-2.0）")
+            continue
+
+        # ── LIC-01 / LIC-02
+        m = by_file.get(f)
+        if m is None:
+            hit["unregistered"].append(f)
+            rep.error("LIC-01",
+                      f"模型 `{f}` **没有登记许可证**（节点 {n.get('type')}）",
+                      fix="核上游仓库的 license 字段，补进 tools/license_registry.json，"
+                          "并把依据写进 pipeline/docs/08_模型许可证.md")
+            continue
+        if m.get("commercial") != "yes":
+            hit["conditional"].append(f)
+            rep.warn("LIC-02",
+                     f"`{f}` 可商用但**有条件**（{m.get('license')}，commercial={m.get('commercial')}）",
+                     notes=m.get("notes"), license_url=m.get("license_url"))
+    return hit
 
 
 # ══════════════════════════════════════════════════════════════════════

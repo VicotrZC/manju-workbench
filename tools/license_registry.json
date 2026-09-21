@@ -1,0 +1,166 @@
+{
+  "_about": [
+    "模型许可证登记表 —— 程序读这一份，人读 pipeline/docs/08_模型许可证.md。",
+    "",
+    "规矩：工作流里加载的每一个模型文件都必须在这里登记；没登记 → 审计报 LIC-01。",
+    "核验方式：读 Hugging Face 官方仓库 API 的 license / license_name 字段，再读 LICENSE 原文。",
+    "不许按名字推断 —— 同厂同系列许可证可以完全不同（Qwen-Image-2512 是 apache-2.0，Qwen-Image-2.1 是 qwen-research）。",
+    "",
+    "commercial 取值：",
+    "  'yes'        无条件可商用",
+    "  'conditional' 可商用但有条件，看 notes",
+    "  'no'         不可商用",
+    "",
+    "⚠️ 这里**故意不记 sha256**：许可证跟文件字节无关，哈希只防损坏不防许可变更。",
+    "   要防的是「换了个模型却没登记」，靠文件名比对就够了。",
+    "",
+    "⚠️ 本表只管模型许可证，不管内容合规（审查 / AI 生成标识 / 备案）。边界见 08 号文档。"
+  ],
+  "verified_date": "2026-09-21",
+  "models": [
+    {
+      "file": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "node": ["UNETLoader"],
+      "role": "图像 · t2i 主模型（首帧路线 A）",
+      "upstream": "Qwen/Qwen-Image-2512",
+      "url": "https://huggingface.co/Qwen/Qwen-Image-2512",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "fp8 量化版；基座 apache-2.0",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。量化副本是衍生，不改变许可。"
+    },
+    {
+      "file": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "node": ["UNETLoader"],
+      "role": "图像 · edit 主模型（首帧路线 B / 资产图）",
+      "upstream": "Qwen/Qwen-Image-Edit-2511",
+      "url": "https://huggingface.co/Qwen/Qwen-Image-Edit-2511",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "fp8mixed 量化版；基座 apache-2.0",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。"
+    },
+    {
+      "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "node": ["CLIPLoader"],
+      "role": "图像线 · 文本编码器",
+      "upstream": "Qwen/Qwen2.5-VL-7B-Instruct",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "fp8_scaled 量化版；基座 apache-2.0",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。"
+    },
+    {
+      "file": "qwen_image_vae.safetensors",
+      "node": ["VAELoader"],
+      "role": "图像线 · VAE",
+      "upstream": "Qwen-Image 系列（随主模型发布）",
+      "url": "https://huggingface.co/Qwen/Qwen-Image-2512",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "随 Qwen-Image 发布的 VAE",
+      "notes": "与 qwen_image_2512 同源同许可。"
+    },
+    {
+      "file": "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors",
+      "node": ["LoraLoaderModelOnly"],
+      "role": "图像线 · t2i 加速 LoRA（8 步）",
+      "upstream": "lightx2v/Qwen-Image-2512-Lightning",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "第三方蒸馏 LoRA；基座 Qwen/Qwen-Image-2512",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。与 WF-15 的「8 步档」对应。"
+    },
+    {
+      "file": "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
+      "node": ["LoraLoaderModelOnly"],
+      "role": "图像线 · edit 加速 LoRA（8 步）",
+      "upstream": "lightx2v/Qwen-Image-Edit-2511-Lightning",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "第三方蒸馏 LoRA；基座 Qwen/Qwen-Image-Edit-2511",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。"
+    },
+    {
+      "file": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "node": ["UNETLoader"],
+      "role": "视频 · H3 Ref2VA 主模型",
+      "upstream": "MiniMaxAI/MiniMax-H3（经 Comfy-Org/MiniMax-H3 打包）",
+      "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
+      "license": "minimax-h3-community-license-agreement",
+      "license_url": "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE",
+      "commercial": "conditional",
+      "license_verified": true,
+      "provenance": "comfyui 打包的 pruned int8 量化版",
+      "notes": "三条硬条件：①地域 —— 欧盟/英国/韩国/美国被列为 Excluded Territories，§V.4 禁止在适用地域外使用或分发；中国在适用地域内。②年收入超 2000 万美元须事先取得书面授权（§IV.1）。③使用它的商业产品须在 UI 上显著展示 'MiniMax H3'（§IV.2）。另 §V.3 禁止用其产物改进其它 AI 模型。"
+    },
+    {
+      "file": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "node": ["LoraLoaderModelOnly"],
+      "role": "视频 · H3 4 步加速 LoRA（Ref2VA 专用）",
+      "upstream": "lightx2v/Minimax-h3-Turbo",
+      "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo",
+      "license": "apache-2.0",
+      "license_url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo",
+      "commercial": "conditional",
+      "license_verified": true,
+      "provenance": "第三方蒸馏 LoRA；基座 MiniMaxAI/MiniMax-H3",
+      "notes": "LoRA 自身 apache-2.0，但它只能配 H3 使用，因此**随基座受 H3 社区许可约束**。别把「LoRA 是 apache」当成「视频线可以随便商用」。"
+    },
+    {
+      "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "node": ["CLIPLoader"],
+      "role": "视频 · H3 文本编码器",
+      "upstream": "Comfy-Org/MiniMax-H3（量化自 Qwen/Qwen3-VL-32B-Instruct）",
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct",
+      "license": "apache-2.0",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "nvfp4_awq 量化版",
+      "notes": "**厂商自己背书的**：H3 的 LICENSE 末尾写明「the encoder of MiniMax H3 uses Qwen3-VL-32B, which is licensed under Apache 2.0 License」。Qwen3-VL-32B-Instruct 官方仓库 cardData.license = apache-2.0。所以这一条即使配 H3 用也不受地域条件限制。"
+    },
+    {
+      "file": "minimax_h3_video_vae_fp16.safetensors",
+      "node": ["VAELoader"],
+      "role": "视频 · H3 视频 VAE",
+      "upstream": "Comfy-Org/MiniMax-H3（源 MiniMaxAI/MiniMax-H3）",
+      "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
+      "license": "minimax-h3-community-license-agreement",
+      "license_url": "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE",
+      "commercial": "conditional",
+      "license_verified": true,
+      "provenance": "Comfy-Org 打包的 fp16 版",
+      "notes": "随 H3 基座，受同样三条硬条件约束。"
+    },
+    {
+      "file": "minimax_h3_audio_vae_fp32.safetensors",
+      "node": ["VAELoader"],
+      "role": "视频 · H3 音频 VAE",
+      "upstream": "Comfy-Org/MiniMax-H3（源 MiniMaxAI/MiniMax-H3）",
+      "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
+      "license": "minimax-h3-community-license-agreement",
+      "license_url": "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE",
+      "commercial": "conditional",
+      "license_verified": true,
+      "provenance": "Comfy-Org 打包的 fp32 版",
+      "notes": "随 H3 基座，受同样三条硬条件约束。"
+    }
+  ],
+  "blocked": [
+    {
+      "match": "qwen_image_2.1",
+      "license": "qwen-research",
+      "url": "https://huggingface.co/Qwen/Qwen-Image-2.1",
+      "why": "仅限研究或评估用途（LICENSE §1.i），§2.a 授权范围写明 FOR NON-COMMERCIAL PURPOSES ONLY，§2.b 商用须向 Qwen 申请许可。**转存不改许可**（Comfy-Org/Qwen-Image-2.1 同样是 qwen-research）。同厂的 Qwen-Image-2512 是 apache-2.0 —— 同系列不同许可，这就是不许按名字推断的原因。"
+    }
+  ]
+}

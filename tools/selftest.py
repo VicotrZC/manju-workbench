@@ -361,18 +361,112 @@ def test_asset_wiring():
                   for i in crep2.items), True)
 
 
+def test_license():
+    """模型许可证判据（LIC-01/02/03）。
+
+    ⚠️ **这个测试是为了钉住一个真发生过的 bug**（2026-09-21，LIC-03 写完第一次真跑就抓到）：
+
+    第一版把 `blocked[].match` **直接当正则**用 —— 而 `qwen_image_2.1` 里的
+    **`.` 在正则里是"任意字符"**，于是它把 **`qwen_image_2512` 也判成受限模型**，
+    在**每一条首帧工作流上误报 LIC-03**。
+
+    这类误报的后果不是"多一条噪音"，是**人会去把检查关掉**。所以这里**两个方向都要钉**：
+    ① 不能把前缀相同的可商用模型误判成受限（误报）；② 真受限的必须抓到（漏报）。
+    """
+    print("\n── 许可证登记 LIC-01/02/03 ──")
+    import json
+
+    import pipeline_audit as audit
+
+    proj = Path("projects") / "美食：全市巡摆，馋哭食客"
+    if not proj.exists():
+        print("  ⏭  项目不在，跳过")
+        return
+
+    reg = audit._license_registry()
+    check("登记表读得到", reg is not None and bool(reg.get("models")), True)
+
+    # ── 登记表必须**恰好覆盖**项目里真实加载的模型文件 ──
+    # ⚠️ 这里**不写死条目数**：写死的话远端加一条工作流、本地就变红，
+    # 而真正该问的是「有没有谁在用没登记的模型」。改成动态比对 ——
+    # 多一个少一个都要报，且报出来的是**文件名**，不是一个数字。
+    known = {m["file"] for m in (reg or {}).get("models") or []}
+    used: set[str] = set()
+    for wf_file in (proj / "workflows").glob("*.json"):
+        try:
+            wf = json.loads(wf_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for n in wf.get("nodes", []):
+            if n.get("type") in audit.LICENSE_LOADER_NODES:
+                wv = n.get("widgets_values") or []
+                if wv and isinstance(wv[0], str) and wv[0].strip():
+                    used.add(wv[0].strip())
+    check("工作流里加载的模型全部有登记（差谁列在下面）", sorted(used - known), [])
+    check("登记表里没有僵尸条目（登了没人用）", sorted(known - used), [])
+    check("登记条目数 = 实际使用数", len(known), len(used))
+
+    # ── ① 误报防线：这些**没被禁**，一个都不许命中 ──
+    for f in ("qwen_image_2512_fp8_e4m3fn.safetensors",
+              "qwen_image_edit_2511_fp8mixed.safetensors",
+              "qwen_image_vae.safetensors",
+              "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors",
+              "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+              "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+              "minimax_h3_ref2va_pruned_int8_convrot.safetensors"):
+        check(f"不误报受限：{f[:38]}", audit._blocked_match(reg, f) is None, True)
+
+    # ── ② 漏报防线：真受限的几种写法都要抓到 ──
+    for f in ("qwen_image_2.1_fp8.safetensors", "Qwen-Image-2.1.safetensors"):
+        check(f"抓得到受限：{f}", audit._blocked_match(reg, f) is not None, True)
+
+    # ── ③ 端到端：拿真工作流的节点列表跑一遍 ──
+    # 视频工作流：5 个模型全登记 → **不许有 LIC-01**，但 H3 那条要有 LIC-02
+    vwf = json.loads((proj / "workflows" / "EP02SC02_S00_h3.json")
+                     .read_text(encoding="utf-8"))
+    r = audit.Report("t")
+    hit = audit.check_license(r, vwf.get("nodes", []))
+    check("视频工作流：登记表覆盖 5 个模型", hit["checked"], 5)
+    check("视频工作流：没有未登记的（LIC-01 不该出现）", hit["unregistered"], [])
+    check("视频工作流：H3 系 4 个模型报『有条件』", len(hit["conditional"]), 4)
+    check("视频工作流：没有受限模型", hit["blocked"], [])
+
+    # ④ 未登记的模型必须被 LIC-01 抓到（**这条才是这张表存在的理由**）
+    fake = [{"type": "UNETLoader", "widgets_values": ["some_unregistered_model.safetensors"]}]
+    r2 = audit.Report("t")
+    hit2 = audit.check_license(r2, fake)
+    check("未登记的模型 → LIC-01", any(i["code"] == "LIC-01" for i in r2.items), True)
+    check("未登记的模型 → 算 ERROR（拦提交）", len(r2.errors), 1)
+
+    # ⑤ 受限模型必须被 LIC-03 抓到，且是 ERROR
+    #    ⚠️ 同时钉住「**一条根因只报一条错**」：命中禁区就短路，不再叠一条 LIC-01。
+    #    第一版没短路，于是同一个模型报出 LIC-03 + LIC-01 两条 ERROR，
+    #    而 LIC-01 的"去补登记"建议是**错的**（补登记等于把禁区模型合法化）。
+    r3 = audit.Report("t")
+    audit.check_license(r3, [{"type": "UNETLoader",
+                              "widgets_values": ["qwen_image_2.1_fp8.safetensors"]}])
+    check("受限模型 → LIC-03", any(i["code"] == "LIC-03" for i in r3.items), True)
+    check("受限模型 → 算 ERROR", len(r3.errors), 1)
+    check("受限模型 → 不叠报 LIC-01（一条根因一条错）",
+          any(i["code"] == "LIC-01" for i in r3.items), False)
+    check("受限模型 → LIC-02 也不该出现",
+          any(i["code"] == "LIC-02" for i in r3.items), False)
+
+
 def main() -> int:
     print("自测 —— 拿已知的坏样例打自己的检查器")
-    print("[1/5] extract_json …", flush=True)
+    print("[1/6] extract_json …", flush=True)
     test_extract_json()
-    print("[2/5] PENDING …", flush=True)
+    print("[2/6] PENDING …", flush=True)
     test_pending()
-    print("[3/5] 镜头表判据 …", flush=True)
+    print("[3/6] 镜头表判据 …", flush=True)
     test_shot_table_rules()
-    print("[4/5] 多场次判据（负向样例）…", flush=True)
+    print("[4/6] 多场次判据（负向样例）…", flush=True)
     test_multi_scene()
-    print("[5/5] 资产接线 CHAIN-03（负向样例）…", flush=True)
+    print("[5/6] 资产接线 CHAIN-03（负向样例）…", flush=True)
     test_asset_wiring()
+    print("[6/6] 许可证登记 LIC（含误报防线）…", flush=True)
+    test_license()
     print("\n" + "─" * 60)
     if FAILED:
         print(f"❌ {len(FAILED)} 项没过：")
