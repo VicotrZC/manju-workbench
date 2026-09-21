@@ -1,0 +1,31 @@
+{
+  "subject": "STYLE_I_H_mature",
+  "auditor": "parent-agent",
+  "verdict": "pass",
+  "summary": "画风探针自身机械不变量全过（ERROR 0）。唯一 WARN 是 WF-22 正向提示词里有 2 处「不要」——该提示词是用户选定画风的来源，是标尺不是产物，保留不动。",
+  "findings": [
+    {
+      "id": "F1",
+      "level": "warn",
+      "code": "WF-22",
+      "claim": "正向提示词里有 2 处否定枚举（「不要」）",
+      "evidence": "workflows/STYLE_I_H_mature.json 的正向 CLIPTextEncode",
+      "fix": "CFG 1.0 下无效。但这是探针、是画风标尺，不改；新写的镜头提示词一律不许有"
+    }
+  ],
+  "blocking": [],
+  "waivers": [],
+  "subjects": {
+    "workflows\\STYLE_I_H_mature.json": "e1619415c0e1ba4226e923e4938c0c9ebb8bfc1f3dc746e3d8c5a888c7e3595d",
+    "script/EP02_SC01_菜市场买肉_戏.md": "67d6caf615404cb8e7ff181c80f8a1d3010f229e7a001c532c84bb4f5692fe16",
+    "storyboard/SCN01_镜头表.json": "17a0a8447b7e194c4a64f29d0c58b1eb19b2b4c514875b80bac624828e3038c4",
+    "storyboard/SCN01_GEO空间地图.md": "718a287bf3effcc6659d929418c57a567c6808699f36b611ddb9bb74f246d721",
+    "audit_rules.json": "75507a23b005ac47df9b6975b7779c573cb91214f0937cc3752eddce229f8a59"
+  },
+  "sealed_at": "2026-09-21T13:45:01",
+  "sealed_by": "tools/pipeline_audit.py seal",
+  "packet": ".work\\audit\\packets\\美食：全市巡摆，馋哭食客.STYLE_I_H_mature.packet.json",
+  "mechanical_at_seal": {
+    "errors": 0
+  }
+}

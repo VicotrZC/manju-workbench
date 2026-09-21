@@ -48,6 +48,81 @@ def get_state(proj: Path, scene: str | None, refresh: bool = False) -> dict:
     return P.scan(proj, scene)
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  「点一下真的往下做」—— 每个阶段一个动作
+# ══════════════════════════════════════════════════════════════════════
+#: `kind`：prog = 程序自己跑；gen = 调模型生成；chain = 多步串起来；user = 只能人做
+ACTIONS: dict[str, dict] = {
+    "S0":  {"kind": "user", "label": "换场次（用上面的下拉框）"},
+    "S1":  {"kind": "gen", "argv": ["gen", "S1"], "label": "让模型写剧本",
+            "note": "S1 生成规格还没做（目前支持 S2 / S4 / S7）"},
+    "S2":  {"kind": "gen", "argv": ["gen", "S2", "--rounds", "3"],
+            "label": "让模型写分镜（不过就自动打回重做，最多 3 轮）"},
+    "S3":  {"kind": "prog", "argv": ["gate", "S3"], "label": "跑「验分镜」门禁"},
+    "S4":  {"kind": "gen", "argv": ["gen", "S4", "--rounds", "3"],
+            "label": "让模型抽角色／道具／场景"},
+    "S5":  {"kind": "prog", "argv": ["gate", "S5"], "label": "跑「验资产」门禁"},
+    "S6":  {"kind": "gen", "argv": ["gen", "S6"], "label": "让模型写提示词",
+            "note": "S6 生成规格还没做（每镜一条工作流，要逐镜跑）"},
+    "S7":  {"kind": "chain", "label": "审查提示词：出审计包 → 模型判定 → 程序封存",
+            "steps": [["audit-all"], ["gen", "S7"], ["seal-all"]]},
+    "S8":  {"kind": "prog", "argv": ["run"], "label": "连服务器生成（先过 S7 才放行）",
+            "cost": "会真的占云机 GPU，按小时计费"},
+    "S9":  {"kind": "prog", "argv": ["qc", "--write"], "label": "机械合规检查并落盘"},
+    "S10": {"kind": "chain", "label": "流程审计（出包 → 模型审 → 封存）",
+            "steps": [["postflight"], ["gen", "S10"], ["seal-all"]]},
+}
+
+
+class Job:
+    """一个后台动作。页面轮询它的 log。"""
+
+    _n = 0
+
+    def __init__(self, proj_name: str, stage: str, argv_sets: list[list[str]],
+                 scene: str | None):
+        Job._n += 1
+        self.id = f"j{Job._n}"
+        self.proj_name = proj_name
+        self.stage = stage
+        self.argv_sets = argv_sets
+        self.scene = scene
+        self.log: list[str] = []
+        self.status = "running"
+        self.rc: int | None = None
+        self.t = threading.Thread(target=self._run, daemon=True)
+        self.t.start()
+
+    def _run(self):
+        import subprocess
+        try:
+            for argv in self.argv_sets:
+                head, rest = argv[0], list(argv[1:])
+                cmd = [sys.executable, str(ROOT / "tools" / "pipeline.py"),
+                       head, self.proj_name, *rest]
+                if self.scene:
+                    cmd += ["--scene", self.scene]
+                self.log.append(f"$ python tools/pipeline.py {' '.join(cmd[2:])}\n\n")
+                r = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                   text=True, encoding="utf-8", errors="replace")
+                self.log.append((r.stdout or "") + (r.stderr or ""))
+                if r.returncode != 0:
+                    self.log.append(f"\n⛔ 这一步返回 {r.returncode} —— 停下，不往下跑。\n")
+                    self.status, self.rc = "failed", r.returncode
+                    return
+            self.status, self.rc = "done", 0
+            self.log.append("\n✅ 这一步做完了。点「↻ 重跑全部门禁」看结果。\n")
+        except Exception as exc:                       # noqa: BLE001
+            self.status, self.rc = "error", -1
+            self.log.append(f"\n💥 {exc!r}\n")
+
+    def text(self) -> str:
+        return "".join(self.log)[-40000:]
+
+
+JOBS: dict[str, Job] = {}
+
+
 PAGE = r"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <title>漫剧管线 · __PROJ__</title>
@@ -204,9 +279,44 @@ function detail(id){
       arts.map(([k,v])=>`<tr><td>${esc(k)}</td><td><code>${esc(v)}</code></td></tr>`).join('')}</table>`
       :'<div class="sub">（这一阶段没有文件产出）</div>'}
     <h3>下一步怎么走</h3>
-    <pre>python tools/pipeline.py ${s.executor==='agent'?'brief':'gate'} ${STATE.project} ${s.id} --scene ${STATE.scene.id}
-python tools/pipeline.py status ${STATE.project} --scene ${STATE.scene.id}</pre>
+    <div id="act"></div>
+    <pre id="logbox" style="display:none"></pre>
   `;
+  renderAct(s);
+}
+
+function renderAct(s){
+  const a=(STATE.actions||{})[s.id];
+  const box=$('#act');
+  if(!a){ box.innerHTML='<div class="sub">（这一阶段没有动作）</div>'; return; }
+  const cls=a.kind==='prog'?'b-prog':(a.kind==='user'?'b-user':'b-agent');
+  let h=`<div class="row" style="margin:8px 0">
+      <button class="go" onclick="go('${s.id}')">▶ ${esc(a.label)}</button>
+      <span class="badge ${cls}">${{prog:'程序跑',gen:'调模型',chain:'多步',user:'人做'}[a.kind]}</span>
+    </div>`;
+  if(a.cost) h+=`<div class="fix">⚠️ ${esc(a.cost)}</div>`;
+  if(a.note) h+=`<div class="fix">ℹ️ ${esc(a.note)}</div>`;
+  if(a.kind==='gen') h+=`<div class="fix">这一步会调模型 API。没配密钥就把 llm_config.json 的 backend 设成 file，请求会进队列等人填答。</div>`;
+  h+=`<pre style="margin-top:10px">python tools/pipeline.py ${a.kind==='gen'?'gen':'gate'} ${STATE.project} ${s.id} --scene ${STATE.scene.id}</pre>`;
+  box.innerHTML=h;
+}
+
+let POLL=null;
+async function go(stage){
+  $('#logbox').style.display='block';
+  $('#logbox').textContent='▶ 启动…\n';
+  const r=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({stage:stage,scene:STATE.scene.id})});
+  const j=await r.json();
+  if(j.error){ $('#logbox').textContent='⛔ '+j.error; return; }
+  clearInterval(POLL);
+  POLL=setInterval(async()=>{
+    const q=await fetch('/api/job?id='+j.job); const o=await q.json();
+    const b=$('#logbox'); b.textContent=o.log||''; b.scrollTop=b.scrollHeight;
+    if(o.status!=='running'){ clearInterval(POLL);
+      b.textContent+='\n── 结束：'+o.status+'（rc='+o.rc+'）──\n';
+      b.scrollTop=b.scrollHeight; }
+  },900);
 }
 $('#scene').addEventListener('change',()=>{SEL=null;load(true);});
 load(false);
@@ -229,6 +339,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self):
+        u = urlparse(self.path)
+        n = int(self.headers.get("Content-Length") or 0)
+        try:
+            body = json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
+        except ValueError:
+            body = {}
+        if u.path == "/api/run":
+            stage = body.get("stage")
+            act = ACTIONS.get(stage)
+            if not act:
+                return self._json({"error": f"没有这个阶段：{stage}"})
+            if act["kind"] == "user":
+                return self._json({"error": act.get("label", "这一阶段只能人做")})
+            argv_sets = act.get("steps") or [act["argv"]]
+            j = Job(self.proj.name, stage, argv_sets, body.get("scene") or self.scene)
+            JOBS[j.id] = j
+            return self._json({"job": j.id, "stage": stage, "label": act["label"]})
+        return self._send(404, b"not found", "text/plain")
+
+    def _json(self, obj: dict):
+        return self._send(200, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
+                          "application/json; charset=utf-8")
+
     def do_GET(self):
         u = urlparse(self.path)
         if u.path == "/":
@@ -243,13 +377,22 @@ class Handler(BaseHTTPRequestHandler):
                 data["all_scenes"] = [
                     {k: v for k, v in s.items() if k != "t"}
                     for s in P.find_scenes(self.proj, P.PA.load_rules(self.proj))]
+                data["actions"] = {k: {"kind": v["kind"], "label": v["label"],
+                                       "note": v.get("note"), "cost": v.get("cost")}
+                                   for k, v in ACTIONS.items()}
             except SystemExit as exc:
                 data = {"error": str(exc)}
             except Exception as exc:                      # noqa: BLE001
                 import traceback
                 data = {"error": f"{exc!r}", "trace": traceback.format_exc()}
-            return self._send(200, json.dumps(data, ensure_ascii=False).encode("utf-8"),
-                              "application/json; charset=utf-8")
+            return self._json(data)
+        if u.path == "/api/job":
+            q = parse_qs(u.query)
+            j = JOBS.get((q.get("id", [""])[0]))
+            if not j:
+                return self._json({"error": "没有这个作业"})
+            return self._json({"id": j.id, "stage": j.stage, "status": j.status,
+                               "rc": j.rc, "log": j.text()})
         return self._send(404, b"not found", "text/plain")
 
 

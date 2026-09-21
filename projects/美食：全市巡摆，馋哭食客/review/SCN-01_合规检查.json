@@ -1,7 +1,7 @@
 {
   "_note": "S9 合规检查记录。**机械项由 `pipeline.py qc` 填；语义项必须由 agent 或用户填，程序不猜。**改动本文件后重新跑 `pipeline.py gate <项目> S9` 复核。",
   "scene": "SCN-01",
-  "checked_at": "2026-09-20T23:11:37",
+  "checked_at": "2026-09-21T13:47:41",
   "canvas": [
     1376,
     768

@@ -1032,12 +1032,19 @@ def cmd_seal(proj: Path, subject: str, verdict_file: str, rules: dict) -> int:
         raise SystemExit(f"❌ 判定里的 subject={v['subject']!r} 与要封存的 {subject!r} 对不上")
 
     # 机械 ERROR 必须逐条被 agent 处理：要么列进 findings，要么显式豁免并给理由
+    #
+    # ⚠️ **只算这一条工作流自己的错。** `check_chain` 报的是**项目级**问题
+    # （BEAT-01 节拍没人认领、SHOT-01 别的镜缺字段…），拿它去拦单条工作流的封条是错的 ——
+    # 那样连画风探针都封不了（2026-09-21 实测：STYLE_I 自身 ERROR 0，却被 13 条链错误拦住）。
+    # 例外：链上的错**点名了这条工作流**（`SHOT-05 …出自 FF_EP02SC01_shot`、
+    # `SHOT-06 首帧工作流 X 被 4 镜共用`）→ 那确实是它的错，要拦。
     pf = PACKET_DIR / f"{proj.name}.{subject}.packet.json"
     mech_errors = []
     if pf.exists():
         pk = json.loads(read(pf))
-        mech_errors = ((pk.get("mechanical") or {}).get("errors") or []) + \
-                      ((pk.get("chain") or {}).get("errors") or [])
+        mech_errors = list((pk.get("mechanical") or {}).get("errors") or [])
+        mech_errors += [e for e in ((pk.get("chain") or {}).get("errors") or [])
+                        if subject in str(e.get("msg", ""))]
     waived = {w.get("code") for w in (v.get("waivers") or [])}
     if not all(w.get("reason") for w in (v.get("waivers") or [])):
         raise SystemExit("❌ 每条 waiver 都必须写 reason")
