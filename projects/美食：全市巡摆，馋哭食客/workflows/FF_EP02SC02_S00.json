@@ -173,7 +173,7 @@
         }
       ],
       "widgets_values": [
-        "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\nA static wide shot at eye level on the pre-dawn street, a lit phone screen showing 04:00 in the dark foreground, one street sweeper far down the empty road, Yan Qing riding his small e-bike out of frame toward the market.\n**本镜取景必须在首帧里就做出来**：全景，24mm，距 4.0m。\n闫清，本场为凌晨出门造型（从被窝坐起→骑小电驴出空街），无换装、无围裙；沿用 CHR-01 身体基础资产本身，a small old scar just above the outer end of his left eyebrow\n道具：手机（凌晨四点闹钟，屏幕亮起 04:00）\n道具：小电驴（闫清代步电动车）\n画面里是干净的无字画面。"
+        "国产三维动画剧集风格：赛璐璐平涂着色叠加体积光，通透的空气感，高饱和但不刺眼的国漫色彩，干净清爽的构图；画面中的角色采用原神那一类的卡通渲染，清晰描边与分层阴影，精致细腻的二次元五官，头发成束块面化。\nA static wide shot at eye level on the pre-dawn street; Yan Qing rides his small e-bike alone on the left, the empty saddle behind him, heading toward the market; far off on the right edge a street sweeper walks away in a hi-vis vest.\n闫清，深夜出门的便装，沿用 CHR-01 基础造型，**单人骑车、后座空着**；外景，无围裙、无湿手、无屠宰血迹，a small old scar just above the outer end of his left eyebrow\n画面里是干净的无字画面。\n道具：小电驴（闫清代步电动车）"
       ],
       "properties": {
         "Node name for S&R": "CLIPTextEncode"

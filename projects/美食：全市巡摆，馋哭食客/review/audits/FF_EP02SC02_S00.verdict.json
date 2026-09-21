@@ -2,42 +2,26 @@
   "subject": "FF_EP02SC02_S00",
   "auditor": "model",
   "verdict": "pass",
-  "summary": "逐条对照：本镜需要的取景（全景、24mm、距 4.0m、平视静机位）以中英双写进了正向提示词，身份（闫清、CHR-01 身体基础资产、凌晨出门造型＋左眉外侧疤）、道具（手机亮屏 04:00、小电驴）、场景（凌晨空街 SCN-02）与画风句（占比 21.5%，过 20% 下限）全部在位，未发现上游写了而提示词丢掉的内容。机械层无 ERROR，唯一 WARN 是 WF-22 的「无字」——项目卡 §399 明确「画面可见文字」是待定策略，属有意写法，不构成 fail；链层的 SHOT-02 是「首帧尚未生成」的状态提示（这张图正是本工作流 FF_EP02SC02_S00 的产物），不是提示词缺件。故判 pass。",
+  "summary": "首帧该管的四件都进了：画风句在描述段第 0 字、占比 23.8%（≥20% 下限），取景句与上游 framing_en 逐字一致（压缩未丢任何分句，两人站位/朝位/景别机位齐全），CHR-01 签名标记英文原文与「无围裙、无湿手、无屠宰血迹」「单人骑车、后座空着」正向否定锁都在，末行声明了无字画面。唯一实质缺口在上游：_framing_note 声称把「画面里正好两个人／闫清是唯一靠近镜头的／环卫工人体型远小于闫清」写进了正向，但 framing_en 原文里这三条并不存在，提示词只是忠实照搬，故记为对上游的意见而非本提示词缺陷。",
   "findings": [
     {
       "id": "F1",
-      "level": "info",
-      "code": "SHOT-02",
-      "claim": "链检查报「镜头 S00 的首帧还没出：FF_EP02SC02_S00_00001_.png」，但这不属于提示词内容缺陷。",
-      "evidence": "chain.errors[0] = SHOT-02，searched 四个路径，likely_real: null，fix 写的是「出首帧：pipeline.py gen … 再 run.py 推云机出图」——即由本工作流自己产出。",
-      "fix": "无需改提示词；审核通过后按 fix 跑 run.py 出图，该 ERROR 自动消解。"
+      "level": "warn",
+      "code": null,
+      "claim": "上游 _framing_note 承诺的防重复加固没有落到 framing_en 原文里，提示词照搬后同样缺这三条，本镜首发失败模式（把闫清画成两个人）只被部分堵住。",
+      "evidence": "_framing_note 自述：「现在正向写死『画面里正好两个人／闫清是唯一靠近镜头的／环卫工人背对镜头且体型远小于闫清／穿反光背心』」。而 shot.framing_en（= 提示词第 2 段原文）实际只有：『A static wide shot at eye level on the pre-dawn street; Yan Qing rides his small e-bike alone on the left, the empty saddle behind him, heading toward the market; far off on the right edge a street sweeper walks away in a hi-vis vest.』。可对上的是「hi-vis vest」＝穿反光背心、「walks away」≈背对镜头、「far off on the right edge」＝远处；缺的是「正好两个人」「闫清是唯一靠近镜头的」「体型远小于闫清」。提示词里确实写了「单人骑车、后座空着」与 alone，挡住了后座搭人，但没有定量人数，也没有把环卫工人与闫清的体型/主次拉开，中文段落的角色卡式描述（闫清＋疤痕）仍有被模型当成独立前景人像渲染的余地。",
+      "fix": "在上游 framing_en 里补回缺失的三条（例：exactly two people in frame; Yan Qing is the only figure near camera; the sweeper is far smaller than Yan Qing），再让 framing_t2i 走压缩。预算可容纳：现 421 字 + 约 40 字 ＝ 约 461 字，仍低于画风句 100 字 ÷ 20% ＝ 500 字上限，占比约 21.7% 仍过 WF-04。"
     },
     {
       "id": "F2",
       "level": "info",
-      "code": null,
-      "claim": "与 WF-22 同类的否定枚举在本条提示词里不止「无字」一处：造型句还写了「无换装、无围裙」。",
-      "evidence": "prompt 中「闫清，本场为凌晨出门造型…无换装、无围裙；沿用 CHR-01 身体基础资产本身」；而 mechanical.items 里 WF-22 只命中 ['无字']（共 1 处）。",
-      "fix": "若沿用 §399 的待定策略保留这些否定写法，建议把「无换装/无围裙」一并登记进 audit_rules.json 的 negative_phrase_whitelist，避免后续同类误报。"
-    },
-    {
-      "id": "F3",
-      "level": "info",
-      "code": null,
-      "claim": "台词落点、帧数与时长内容不属于首帧工作流，不计入本次判定。",
-      "evidence": "beats_owned.B1 有两条 VO（「系统说，小区五百米路南的菜市场，四点半就开门。」「我定闹钟的时候还在想——谁会四点半去买菜。」），shot.frames=175、duration_s=7.29、content 记「零对白，两句VO，不出台词」，均为视频工作流 EP02SC02_S00_h3 的范畴。",
-      "fix": "首帧提示词无需增补台词/时长信息；留给对应视频工作流处理。"
+      "code": "SHOT-05",
+      "claim": "层链里 SHOT-05 的文案与它自己的数值自相矛盾，属工具提示串错误，不影响本镜判定。",
+      "evidence": "chain.items[SHOT-05]：『首帧画风句占比不过（镜头表登记的首帧出自 FF_EP02SC02_S00）：[WF-04] 画风句占比 23.8%（下限 20%）』—— 23.8% ≥ 20% 是过闸，措辞「不过」为误；同一审计包 mechanical 亦为 ok:true、errors 为空。",
+      "fix": "修 tools/ 里 SHOT-05 的模板串，改为按 ok/fail 分支输出（此处应为「画风句占比达标」）。"
     }
   ],
   "blocking": [],
-  "waivers": [
-    {
-      "code": "WF-22",
-      "reason": "「无字」系项目卡 §399「画面可见文字」待定策略下的有意写法，非笔误；且 CFG 1.0 下该 WARN 只影响字数占比（画风句仍 21.5% 过线），不构成提示词内容缺失，故不作为 fail 依据。"
-    },
-    {
-      "code": "SHOT-08",
-      "reason": "该 WARN 只是把 WF-22 从首帧提示词侧回述一遍（msg 明确「镜头表登记的首帧出自 FF_EP02SC02_S00」），根因同上，一并豁免。"
-    }
-  ]
+  "waivers": [],
+  "_ask": "tools/s7_verdict.py"
 }

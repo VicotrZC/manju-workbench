@@ -1047,6 +1047,11 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
     # 拿完整句去比对必然误报（2026-09-21 实测）。
     if shot is not None and is_video_wf:
         want = norm_ws(shot.get("framing_en") or shot.get("shot_size") or "")
+        # ⚠️ **只比对取景句的前半段（到第一个逗号/分号）**，不比对整句。
+        # 取景句天然分两段：前半锁「景别／机位／朝向」，后半铺「画面里有什么」。
+        # h3 需要的是前半（首帧本来就提供后半的构图）；后半可以很长，
+        # 拿整句去比会**逼着人把取景句写短**，反而丢掉构图信息（2026-09-21 实测）。
+        head_want = norm_ws(re.split(r"[,;，；]", want)[0]) or want
         m = re.search(r"\[\s*shot\s*1\s*\]", styled, re.I)
         if m:
             head = norm_ws(styled[m.end():m.end() + 400])
@@ -1058,9 +1063,9 @@ def check_workflow(proj: Path, wf_name: str, rules: dict, chain: dict) -> tuple[
             if geo:
                 probe = probe.replace(norm_ws(geo), "")
             head, where = probe.strip()[:300], "描述段开头 300 字内"
-        if want and want.lower() not in head.lower():
+        if head_want and head_want.lower() not in head.lower():
             rep.error("WF-10",
-                      f"镜头 {shot.get('id')} 的取景句「{want}」没出现在{where}",
+                      f"镜头 {shot.get('id')} 的取景句前半段「{head_want}」没出现在{where}",
                       got=head[:160] + "…",
                       fix="首帧与提示词取景不一致时 H3 会真的移机位，"
                           "并在背景留下一个重复的人")

@@ -40,6 +40,7 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -562,9 +563,22 @@ def gate_S5(proj: Path, rules: dict, scene: dict, state: dict) -> Rep:
             aid = a.get("id", "?")
             files = a.get("files") or []
             if not files:
-                r.e("S5-02", f"{aid} 没有登记任何资产图文件",
-                    fix="01_资产规范 §〇：无图不进分镜。**先出图，再把路径登记进来**；"
-                        "还没出的图不算错，但必须有一个明确的路径")
+                # ⚠️ 2026-09-21 修的判据错位：原来一律报 ERROR，于是 S4 **永远过不去** ——
+                # 因为作业单写的是「盘上没有的路径不许写」，而盘上此刻**根本没有道具图**
+                # （道具资产还没出过）。两条要求直接冲突，模型跑满 3 轮也解不开。
+                #
+                # 现在分档：**说清了"还没做"就算待产出，含糊不清才算错**。
+                # 判据不是"有没有图"，而是"有没有说清楚"。
+                note = str(a.get("why") or a.get("_note") or a.get("TODO") or "")
+                if any(k in note for k in ("未出", "还没", "待出", "无图", "尚未", "没有图")):
+                    r.p("S5-02", f"{aid} 的资产图还没出（清单里已写明）")
+                else:
+                    r.e("S5-02",
+                        f"{aid} 没有登记任何资产图文件，**也没说这张图还没出**",
+                        fix="01_资产规范 §〇：无图不进分镜。两条路选一条："
+                            "① 图已经在盘上 → 把真实路径写进 `files`；"
+                            "② 图还没出 → 在 `why` 或 `_note` 里写明「资产图未出」，"
+                            "S5 会记成待产出、到 S8 推 GPU 之前再拦")
             for rel in files:
                 if not (proj / "assets" / rel).exists() and \
                    not (proj / "outputs" / rel).exists():
@@ -1434,6 +1448,24 @@ def _beats_digest(proj: Path, rules: dict, scene: dict | None = None) -> str:
     return body or txt
 
 
+def _real_asset_files(proj: Path) -> str:
+    """盘上**真实存在**的资产图清单（相对 `assets/`）。
+
+    ⚠️ 2026-09-21：S4 的模型**看不到文件系统**，所以它只能猜路径 ——
+    实测它编出了 `PROP/PROP01_phone_alarm_00001.png` 这种盘上根本没有的文件，
+    然后 S5 报"图不在盘上"，模型再跑一轮又编一个更离谱的。
+    **给模型的上下文要包含它无法自己获取的事实。**
+    """
+    root = proj / "assets"
+    if not root.is_dir():
+        return "（assets/ 下还没有任何文件）"
+    rows = []
+    for p in sorted(root.rglob("*")):
+        if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+            rows.append("  " + str(p.relative_to(root)).replace("\\", "/"))
+    return "\n".join(rows) if rows else "（assets/ 下还没有任何图片）"
+
+
 def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
     """每个可生成阶段的「要什么、写到哪、写完用什么门禁验」。"""
     sid = scene["id"]
@@ -1453,6 +1485,9 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
         plan = PA.scene_plan(rules, sid)
         my_script = plan.get("script") or rules.get("script")
         my_geo = scene.get("t", {}).get("geo") or rules.get("geo_file")
+        # 本场的部件名：`EP02` ＋ 场次数字（`SCN-02` → `EP02SC02`）
+        digits = "".join(ch for ch in sid if ch.isdigit())
+        stem = f"{t.get('episode') or 'EP02'}SC{digits.zfill(2)}"
         return {
             "name": "分镜（机器可读镜头表）",
             "out": out,
@@ -1481,7 +1516,7 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
       "first_frame": "首帧文件名.png",
       "first_frame_workflow": "出首帧的工作流名",
       "workflow": "这一镜的 H3 工作流名（一镜一个，不许共用）",
-      "assets": ["CHR-01", "SCN-02"],
+      "assets": ["CHR-01", "PRP-02", "SCN-02"],
       "content": "这一镜演什么"}}
   ]
 }}
@@ -1496,19 +1531,22 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
 - beats 里的编号必须真实存在于上面的戏里。
 - **`assets` 必须写全这一镜真的用到的资产**（角色／道具／场景的 id）。
   这是 `01_资产规范` §P3 的 `@锚点` —— 没有它，"资产做完了却一镜没用"就无人发现。
-  编号前缀照规范：角色 `CHR-<两位>`、场景 `SCN-<两位>`、道具 `PRP-<两位>`。
+  编号前缀照规范：角色 `CHR-<两位>`、场景 `SCN-<两位>`、道具 **`PRP-<两位>`**
+  （道具是 **PRP** 不是 PROP —— `01_资产规范` §201 这么定的；写错了 S5 的引用核对会对不上）。
 - **每条 `content` 一句话说完**（这是给人的摘要，不是剧本）；`framing_en` 一行。
 
 ## 命名规则（**必须照抄格式，编号随镜号变**）
+本场次的部件名是 `{stem}`（＝ `{t.get('episode','EP02')}` ＋ 场次数字，去掉连字符）。
 把 `<ID>` 换成该镜的镜号（如 S00、S01）：
-- `workflow`             = `EP02SC01_<ID>_h3`        → 写完是 `workflows/EP02SC01_<ID>_h3.json`
-- `first_frame_workflow` = `FF_EP02SC01_<ID>`        → 写完是 `workflows/FF_EP02SC01_<ID>.json`
-- `first_frame`          = `FF_EP02SC01_<ID>_00001_.png`　（落在 `outputs/`，由上面那条工作流出图；
+- `workflow`             = `{stem}_<ID>_h3`        → 写完是 `workflows/{stem}_<ID>_h3.json`
+- `first_frame_workflow` = `FF_{stem}_<ID>`        → 写完是 `workflows/FF_{stem}_<ID>.json`
+- `first_frame`          = `FF_{stem}_<ID>_00001_.png`　（落在 `outputs/`，由上面那条工作流出图；
   序号 `00001_` 是第一次跑，重跑会自增）
 
 > 这三条**不是建议**：盘上真名就是这个规律（`outputs/FF_EP02SC01_S01_00002_.png` 等）。
-> 不要自创 `mz_*.png` 这类名字 —— 出图程序不会产出它，那一镜就永远拿不到首帧。
+> 不要自创 `mz_*.png` 这类名——出图程序不会产出它，那一镜就永远拿不到首帧。
 > **首帧图此刻还不存在是正常的**（要等出图），但**文件名必须一次写对**。
+> ⚠️ **`{stem}` 是这一场自己的**，别写成别的场次的（拆场次后每场一套工作流）。
 
 ## 输出纪律（**违反会被打回重做**）
 - 顶层**只写 schema 里列出的字段**。不要 `_about`、不要 `known_gaps`、
@@ -1525,11 +1563,14 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
             "gate": "S5",
             "ask": f"""从这一场的戏与镜头表里**抽出需要跨镜一致的角色／道具／场景**。
 
-## 上游：戏
-{_read_if(proj, rules.get('script'))}
+## 上游：本场的戏（**只用这一场的戏**，别拿别场的）
+{_beats_digest(proj, rules, scene)}
 
-## 上游：镜头表
+## 上游：本场的镜头表
 {json.dumps(t, ensure_ascii=False, indent=2)}
+
+## 上游：盘上**真实存在**的资产图（**只能从这里挑，不许自己编路径**）
+{_real_asset_files(proj)}
 
 ## 上游：项目已登记的角色锁定件（**签名标记必须原样带过来**）
 {json.dumps(rules.get('characters') or {}, ensure_ascii=False, indent=2)}
@@ -1540,19 +1581,30 @@ def _gen_spec(stage_id: str, proj: Path, rules: dict, scene: dict) -> dict:
 ## 输出 schema
 {{
   "scene": "{sid}",
-  "characters": [{{"id":"CHR-01","name":"...","files":["资产图相对路径"],
+  "characters": [{{"id":"CHR-01","name":"...","files":["资产图相对路径（从上面那份真实清单里挑）"],
                    "signature":"签名标记原文","used_in":["S01","S02"],
                    "costume":"本场造型（围裙/湿手/伤口之类）"}}],
-  "props":      [{{"id":"PROP-01","name":"...","files":[],"used_in":["S03"],
+  "props":      [{{"id":"PRP-01","name":"...","files":[],"used_in":["S03"],
                    "why":"为什么它必须跨镜一致"}}],
-  "scenes":     [{{"id":"{sid}","name":"...","files":[],"used_in":["S01"]}}]
+  "scenes":     [{{"id":"{sid}","name":"...","files":["资产图相对路径"],"used_in":["S01"]}}]
 }}
 
 ## 硬约束
 - 三段（characters / props / scenes）**都必须有**，空的写 []。
 - 每项必须有 id；characters 必须有 signature。
 - **不许留 TODO**。
-- 每一项的 id 必须能在镜头表里被引用到（`used_in` 里写清哪几镜用它）。""",
+- **`used_in` 必须写**，而且要跟镜头表里那些镜头的 `assets` 字段对得上：
+  镜头表说某一镜用了 CHR-01，这里 CHR-01 的 `used_in` 就必须含那一镜号。
+- **`files` 只能写上面那份"盘上真实存在"清单里的路径**，
+  一个盘上没有的路径都不许写（写了 S5 会报"图不在盘上"）。
+  角色图：从 `CHR/` 里挑与这个角色相符的（**全身图优先**）。
+  场景图：从 `SCN/` 里挑。
+  **道具图盘上还没有**（`prop_images/` 是空的）→ 道具的 `files` 写 `[]`，
+  并在 `why` 里**明确写出「资产图未出」**这四个字。
+  写了这四个字，S5 就把它记成**待产出**而不是错；不写才会被判成"没登记"。
+  **绝对不许编一个盘上不存在的文件名。**
+- **编号前缀照 `01_资产规范`**：角色 `CHR-<两位>`、场景 `SCN-<两位>`、道具 `PRP-<两位>`。
+  （道具是 `PRP` 不是 `PROP`；用错了 S5 的引用核对会对不上。）""",
         }
 
     if stage_id == "S7":
@@ -1861,20 +1913,50 @@ def shot_for_ff_workflow(scene: dict, wf_name: str) -> dict:
 
 
 def p1_assets(proj: Path, rules: dict, scene: dict, shot: dict) -> dict:
-    """这一镜用到的资产明细（从资产清单里按 `assets` 字段取）。"""
+    """这一镜用到的资产明细（从资产清单里按 `assets` 字段取）。
+
+    ⚠️ 2026-09-21 血的教训：这里原来写的是
+        `except ValueError: return out`   ← 清单 JSON 坏了就**静默返回空**
+    后果是一整条链的静默失败：人物句整条不存在 → 生成的首帧提示词**没有身份锚**
+    → 而身份锚自检在空列表上遍历，**什么都没查到，于是放行**。
+    最后跑出一张脸对不上的图，全程没有任何一处报错。
+
+    **清单坏了就是坏了，必须炸出来。** 空清单与"清单里说这一镜不用任何资产"
+    是两件完全不同的事，不能同一种返回值表示。
+    """
     am = proj / "storyboard" / f"{scene['id']}_资产清单.json"
     out = {"characters": [], "props": [], "scenes": []}
     if not am.exists():
         return out
     try:
         man = json.loads(read(am))
-    except ValueError:
-        return out
+    except ValueError as exc:
+        raise SystemExit(
+            f"❌ 资产清单不是合法 JSON：{am.relative_to(proj)}\n   {exc}\n"
+            f"   **不静默当成空清单** —— 那会让提示词丢掉身份锚而无人发现。\n"
+            f"   修好它，或跑 `pipeline.py gen {proj.name} S4` 重出。") from None
     want = set(shot.get("assets") or [])
     for key in ("characters", "props", "scenes"):
         for a in (man.get(key) or []):
             if a.get("id") in want:
                 out[key].append(a)
+    # ⚠️ 第二道防线：**镜头表说要用的资产，清单里必须解析得出来。**
+    # 2026-09-21：清单 JSON 坏掉时上面那条 `except` 静默返回空，
+    # 于是这一镜的资产一个人都没有、提示词里没有身份锚，而**没有任何地方报错**。
+    # 现在对不上就炸 —— "解析不出来"与"这一镜确实不用资产"必须分得开。
+    got = {a.get("id") for k in out for a in out[k]}
+    missing = sorted(want - got)
+    if missing:
+        have = set()
+        for k in ("characters", "props", "scenes"):
+            for a in (man.get(k) or []):
+                have.add(a.get("id"))
+        have_s = "、".join(sorted(str(x) for x in have))
+        raise SystemExit(
+            f"❌ 镜头 {shot.get('id')} 登记要用的资产，在 {am.name} 里找不到："
+            f"{'、'.join(str(x) for x in missing)}\n"
+            f"   （清单里有的：{have_s}）\n"
+            f"   **不许当成『这一镜不用资产』继续跑** —— 那样提示词会丢掉身份锚。")
     return out
 
 
@@ -1917,6 +1999,54 @@ def geo_cn_block(proj: Path, rel: str | None) -> str:
     return "\n".join(body).strip()
 
 
+def framing_t2i(shot: dict, budget: int) -> str:
+    """取景句的 **t2i 版**：在 `budget` 字内**保语义地压缩**。
+
+    2026-09-21：`framing_en` 归 h3 用（要求 `<Shot 1>` 后 400 字内出现，WF-10），
+    可以写得细；但 t2i 描述段有硬预算（画风句 100 字 / 下限 20% ＝ 500 字上限），
+    直接放整句会把占比压到 19.0%（实测）。
+
+    压缩**只做两件事**，都不丢信息：
+    1. 砍掉冗余限定词（`and is the only figure close to the camera` 这类，
+       已在别的分句里说过）；
+    2. 语义压缩固定短语（`at eye level` → `eye level`、`his face turned away` → `face away`）。
+    **不删任何分句** —— 构图信息（有几个人、谁在哪、朝哪）一个都不能少，
+    上一版就是因为丢了构图信息才把闫清画成两个人。
+    """
+    f = (shot.get("framing_en") or "").strip()
+    if not f or PA.noscript_chars(f) <= budget:
+        return f
+    subs = [
+        (r"\band is the only figure close to the camera\b", ""),
+        (r"\bA static wide shot at eye level\b", "Static wide shot, eye level"),
+        (r"\bA static medium shot at eye level\b", "Static medium shot, eye level"),
+        (r"\bfrom mid-ground across the frame\b", "mid-ground, across frame"),
+        (r"\btoward the market\b", "toward the market"),
+        (r"\bseen from behind as a distant small silhouette\b",
+         "from behind, distant small silhouette"),
+        (r"\bin a high-visibility vest\b", "in a hi-vis vest"),
+        (r"\bhis face turned away and his body much smaller than Yan Qing's\b",
+         "face away, much smaller than Yan Qing"),
+        (r"\bshowing exactly\b", "showing exactly"),
+        (r"\bone street sweeper is\b", "one street sweeper"),
+        (r"\bYan Qing rides his small e-bike\b", "Yan Qing rides his e-bike"),
+    ]
+    out = f
+    for pat, rep in subs:
+        out = re.sub(pat, rep, out)
+    out = re.sub(r"\s{2,}", " ", out).replace(" ;", ";").replace("; ;", ";")
+    if PA.noscript_chars(out) <= budget:
+        return out
+    print(f"   ⚠️ t2i 取景句压到 {PA.noscript_chars(out)} 字仍超 {budget} 字预算，"
+          f"按分句截断（可能丢构图信息 —— 请检查）")
+    keep = []
+    for part in re.split(r"(?<=[;.])", out):
+        if PA.noscript_chars("".join(keep) + part) > budget:
+            break
+        keep.append(part)
+    return "".join(keep).strip() or out
+
+
 def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
                      style: str, keep: str = "") -> str:
     """首帧 t2i 提示词。
@@ -1931,21 +2061,33 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
 
     第一版是"超预算就 break" —— 结果一条超长的场景句把后面**全丢了**，
     包括 `WF-07` 要核的身份锚英文原文。而且"丢掉"这件事本身**没有任何补偿动作**。
-    现在按优先级分三档：**必需**（画风句／取景／身份锚／无文字）永远留；
-    **重要**（人物装扮、道具）在预算内尽量留；**可压**（场景）最后留 —— 超了从它开始砍。
+    现在按优先级分档，**从最低档整档丢，丢到占比达标为止**：
+
+    | 档 | 内容 | 为什么是这个次序 |
+    |---|---|---|
+    | 1（永不丢） | 画风句 | `WF-02/03/04`；画风就是靠它 |
+    | 1（永不丢） | **取景句** | 首帧的唯一职责就是构图 |
+    | 1（永不丢） | **人物句（含身份锚英文原文）** | 首帧的另一个职责是脸（`WF-07/08`） |
+    | 4 | 无文字声明 | 重要，但缺了只是可能出乱码字 |
+    | 5 | 道具 | 可少 |
+    | 6 | 场景 | 最可少 |
+
+    **丢到没有身份锚就报错，不许静默生成** —— 一条没有身份锚的首帧提示词
+    会跑出一张脸对不上的图，而那正是本项目返工最多的地方。
     """
     assets = p1_assets(proj, rules, scene, shot)
     rel = (scene.get("t") or {}).get("geo") or rules.get("geo_file")
     geo_cn = geo_cn_block(proj, rel)
 
-    # ── ① 必需：画风句（第 0 字）+ 取景句 ──
-    # ⚠️ 取景句用**完整原文**，不做精简。2026-09-21 模型审出来的：
-    # 我原来用 `framing_en_compact` 只留前半句，结果「手机亮屏在暗处前景／环卫工在远处
-    # 路尽头／闫清骑出画面朝菜市场」这些**构图信息全丢了** ——
-    # 而首帧恰恰就是构图。省字数要从场景段省，不能从取景句省。
+    # ── 第 1 档：画风句（第 0 字）+ 取景句 ──
+    # ⚠️ 取景句用**压缩版**（`framing_t2i`，只删冗余限定词与固定短语、分句一个不删）。
+    # 不用完整原文是因为 t2i 描述段有硬预算；但**也不能砍到只剩半句** ——
+    # 2026-09-21 实测：砍成半句之后构图信息全丢，模型审出来两条 error。
+    # 预算取 200 字：够放下「谁在哪、几个、朝哪」（实测 183 字），
+    # 又给人物句（约 80 字）留得出位置（画风句 100 ÷ 20% ＝ 总量上限 500）。
     must = [style]
     if shot.get("framing_en"):
-        must.append(str(shot["framing_en"]).strip())
+        must.append(framing_t2i(shot, 200))
     # ── ② 必需：身份锚（WF-07 逐字核这句英文）+ 正向否定锁（WF-08）──
     who = []
     for c in assets["characters"]:
@@ -1953,7 +2095,9 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
         if c.get("name"):
             bits.append(str(c["name"]))
         if c.get("costume"):
-            bits.append(str(c["costume"]))
+            # ⚠️ 去掉结尾标点再拼 —— 否则会出现「……本身（…用）。，a small old scar…」
+            # 这种双标点（2026-09-21 实测）。**拼接出来的提示词也要读得通。**
+            bits.append(str(c["costume"]).rstrip("。．.；;，,、 "))
         if c.get("signature"):
             bits.append(str(c["signature"]))          # **英文原文，逐字**
         for lock in (c.get("positive_locks") or []):
@@ -1969,8 +2113,6 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
                 if ln.strip().startswith("—")]
         sc_bits = head[:2]
     scene_line = ("场景：" + "；".join(sc_bits) + "。") if sc_bits else ""
-    if keep:
-        must.append(keep)          # 取景复述：也是构图依据，算必需
     tail = "画面里是干净的无字画面。"
 
     floor = (rules.get("style_ratio_min") or {}).get("t2i", 0.2)
@@ -1987,25 +2129,42 @@ def build_t2i_prompt(proj: Path, rules: dict, scene: dict, shot: dict,
                 out.append(p)
         return "\n".join(out)
 
-    full = assemble(must + who + props + [scene_line, tail])
-    if style_n / max(1, nchars(full)) >= floor:
-        return full
+    # ══ 装不下时**按档整档丢** ══
+    # 第 1 档（画风句／取景句／人物句）永不丢；4→5→6 依次丢。
+    # ⚠️ 2026-09-21 三轮实测教训：前两版用「算一个剩余预算、超了就跳」，
+    # 结果取景句过长时人物句被静默挤掉，生成了一张**没有身份锚**的提示词。
+    # **静默丢必需项比报错危险得多。**
+    FIXED = [style] + ([must[1]] if len(must) > 1 else []) + who
+    OPTIONAL = [[tail], props, [scene_line]]
+    kept = [p for tier in OPTIONAL for p in tier]
 
-    # 需要截短：**先砍场景，再砍道具**，必需项一个都不动
-    print(f"   ⚠️ t2i 描述段 {nchars(full)} 字，画风句占比 {style_n / nchars(full):.1%}"
-          f" 低于下限 {floor:.0%} —— 按优先级截短（先砍场景、再砍道具）")
-    for drop in ([scene_line], [scene_line] + props[-1:], [scene_line] + props):
-        cand = assemble(must + who + [p for p in props if p not in drop]
-                        + ([scene_line] if scene_line not in drop else []) + [tail])
-        if style_n / max(1, nchars(cand)) >= floor:
-            return cand
-    # 砍到只剩必需项还是不够 → 这是**内容问题**，报出来别自己硬改
-    out = assemble(must + who + [tail])
-    ratio = style_n / max(1, nchars(out))
-    if ratio < floor:
-        print(f"   ⛔ 砍到只剩必需项仍只有 {ratio:.1%}（画风句 {style_n} 字 / "
-              f"上限 {int(style_n / floor)} 字）—— 取景句太长或身份锚太长，"
-              f"要么精简它们，要么下调 style_ratio_min（**那是内容决定，交用户**）")
+    def ok_ratio(parts: list[str]) -> bool:
+        return style_n / max(1, nchars(assemble(parts))) >= floor
+
+    for tier in reversed(OPTIONAL):          # 场景 → 道具 → 无文字
+        if ok_ratio(FIXED + kept):
+            break
+        live = [p for p in tier if p in kept]
+        if live:
+            kept = [p for p in kept if p not in live]
+            print(f"   ⚠️ t2i 描述段超预算 → 丢掉一档（{live[0][:24]}…）")
+
+    out = assemble(FIXED + kept)
+    # ══ 硬不变量：身份锚必须在（**丢到没有就报错，不许静默生成**）══
+    need_sig = [c.get("signature") for c in assets["characters"] if c.get("signature")]
+    lost = [sg for sg in need_sig if sg not in out]
+    if lost:
+        raise SystemExit(
+            f"❌ t2i 提示词装不下身份锚（{len(lost)} 条丢失）：\n"
+            + "\n".join(f"   - {sg}" for sg in lost)
+            + f"\n   画风句 {style_n} 字 ÷ 下限 {floor:.0%} ＝ 描述段上限 "
+              f"{int(style_n / floor)} 字，而「取景句＋人物句」本身就超了。\n"
+              f"   → 要么把镜头表里的 `framing_en` 写短一点，要么下调 "
+              f"`style_ratio_min.t2i`（**那是内容决定，交用户**）。\n"
+              f"   **不许生成一张没有身份锚的首帧提示词** —— 首帧的脸就靠它锚定。")
+    if not ok_ratio(FIXED + kept):
+        print(f"   ⛔ 丢到只剩画风句＋人物句仍只有 "
+              f"{style_n / max(1, nchars(out)):.1%}（下限 {floor:.0%}）")
     return out
 
 
@@ -2222,9 +2381,10 @@ def _gen_s6(proj: Path, rules: dict, scene: dict, rounds: int) -> int:
                 print(f"❌ {sid} 没登记 first_frame_workflow / workflow —— 先跑 S2")
                 return 1
             texts = texts_by_shot.get(sid) or {}
-            keep = ("**本镜取景必须在首帧里就做出来**："
-                    f"{s.get('shot_size','')}，{s.get('lens_mm')}mm，距 {s.get('dist_m')}m。")
-            t2i = build_t2i_prompt(proj, rules, scene, s, style, keep)
+            # ⚠️ 这里**不再拼「本镜取景必须在首帧里就做出来：…」那一行** ——
+            # 取景句本身已经在提示词里，再复述一遍是重复信息，
+            # 而且会把 t2i 描述段顶过画风占比的预算（2026-09-21 实测：占比被压到 16.3%）。
+            t2i = build_t2i_prompt(proj, rules, scene, s, style)
             (proj / "workflows" / f"{ffw}.json").write_text(
                 json.dumps(build_t2i_workflow(
                     t2i, f"{rules.get('slug','proj')}/{ffw}",
