@@ -72,14 +72,32 @@ EFF_H_MM = 36.0                  # 横屏水平有效传感器（04 §二）
 TXT_BOX = dict(facecolor="white", alpha=0.82, edgecolor="none", pad=1.2)
 
 # 中文字体：按可用性回退，缺字时不让整张图崩掉
-for _f in ("Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "SimSun"):
-    try:
+#
+# ⚠️ 2026-09-21 修（换到 Linux 后实测踩到）：
+# 旧写法是 `try: 设 rcParams; break  except: continue` —— **它永远在第一次就 break**，
+# 因为「给 rcParams 赋值」这件事本身从不报错。于是它必然选中表里第一个
+# `Microsoft YaHei`（Windows 专有），在 Linux 上该字体不存在 → matplotlib 静默回退到
+# DejaVu Sans → **图是出得来的，只是所有中文变成豆腐块**，而且不报错。
+# 这正是 规矩.md §0 说的「换系统就废」：静默、且看起来成功。
+# 现在改成**先查字体是否真的存在**（ttflist），一个都没有时**明确告警**，不装成功。
+_CJK_CANDIDATES = (
+    "Microsoft YaHei", "SimHei",                      # Windows
+    "Noto Sans CJK SC", "Source Han Sans SC",         # Linux（fonts-noto-cjk）
+    "WenQuanYi Zen Hei", "Droid Sans Fallback",       # Linux（其他常见包）
+    "Noto Sans CJK JP", "SimSun",                     # 兜底
+)
+_INSTALLED_FONTS = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
+for _f in _CJK_CANDIDATES:
+    if _f in _INSTALLED_FONTS:
         matplotlib.rcParams["font.sans-serif"] = [_f] + list(
             matplotlib.rcParams.get("font.sans-serif", []))
         matplotlib.rcParams["axes.unicode_minus"] = False
         break
-    except Exception:            # noqa: BLE001
-        continue
+else:
+    print("⚠️ 系统里一个中文字体都没有：本图的中文标注会变成豆腐块。\n"
+          "   Debian/Ubuntu: sudo apt install fonts-noto-cjk\n"
+          "   或把任一中文字体放进 ~/.local/share/fonts/ 后重跑。",
+          file=sys.stderr)
 
 
 # ── 光学（唯一来源：04 §二）─────────────────────────────────────────────
