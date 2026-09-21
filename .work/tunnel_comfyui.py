@@ -24,7 +24,10 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST, PORT = (ROOT / 'ssh' / 'server.txt').read_text(encoding='utf-8').split()[:2]
+# utf-8-sig 而不是 utf-8：主机名**每次开机都会变**，谁来编辑都可能用 Windows 工具，
+# 而 PowerShell 的 `Set-Content -Encoding UTF8` 会写 BOM —— BOM 会变成主机名的第一个字符。
+# ssh/_target.py 早就为此改成 utf-8-sig，这里当时漏了（2026-09-21 补）。
+HOST, PORT = (ROOT / 'ssh' / 'server.txt').read_text(encoding='utf-8-sig').split()[:2]
 LOCAL_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8188
 REMOTE_PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8188
 REMOTE_HOST = '127.0.0.1'

@@ -17,6 +17,9 @@
 """
 import io
 import json
+import os
+import re
+import signal
 import socket
 import subprocess
 import sys
@@ -41,6 +44,13 @@ DAEMON = ROOT / ".work" / "run_tunnel_daemon.py"
 LOG = ROOT / ".work" / "tunnel.log"
 PORT = 8188
 
+# ★ 2026-09-21 新增：本脚本此前是 **Windows 专有**的（PowerShell `Get-NetTCPConnection`、
+# WMI `Invoke-CimMethod Win32_Process`、`pythonw.exe`），换到 Linux 后 `start()` 直接
+# 在 `subprocess.run(["powershell", ...])` 上 FileNotFoundError —— 又一次「换系统就废」。
+# 隧道本体 `.work/tunnel_comfyui.py` **本来就是跨平台的**（纯 paramiko），
+# 所以这里只补 POSIX 分支，Windows 那条 WMI 路一字未动。
+IS_WIN = os.name == "nt"
+
 
 def ps(script: str, timeout: int = 60) -> str:
     """跑一段内联 PowerShell（不是 .ps1 文件，所以不受脚本执行策略限制）。"""
@@ -51,6 +61,22 @@ def ps(script: str, timeout: int = 60) -> str:
 
 
 def port_pid():
+    if not IS_WIN:
+        # POSIX：先用 ss（iproute2，几乎必有），取不到再退 lsof。
+        # ss 的 pid 藏在 users:(("python",pid=1234,fd=7)) 里；lsof -ti 直接就是 pid。
+        for cmd in (["ss", "-ltnpH", "sport = :%d" % PORT],
+                    ["lsof", "-ti", "tcp:%d" % PORT, "-sTCP:LISTEN"]):
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+            out = (r.stdout or "").strip()
+            if not out:
+                continue
+            m = re.search(r"pid=(\d+)", out) or re.match(r"(\d+)", out)
+            if m:
+                return int(m.group(1))
+        return None
     out = ps("(Get-NetTCPConnection -LocalPort %d -State Listen -ErrorAction SilentlyContinue |"
              " Select-Object -First 1).OwningProcess" % PORT)
     return int(out) if out.isdigit() else None
@@ -100,7 +126,14 @@ def stop() -> int:
     if not pid:
         print("8188 上没有进程")
         return 0
-    print(ps("Stop-Process -Id %d -Force; '已停 pid %d'" % (pid, pid)))
+    if IS_WIN:
+        print(ps("Stop-Process -Id %d -Force; '已停 pid %d'" % (pid, pid)))
+    else:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print("已停 pid %d（SIGTERM）" % pid)
+        except ProcessLookupError:
+            print("pid %d 已经不在了" % pid)
     return 0
 
 
@@ -137,12 +170,24 @@ def start() -> int:
         time.sleep(1)
 
     exe = PYW if PYW.exists() else PY
-    cmdline = '"%s" "%s"' % (exe, DAEMON)
-    script = ("$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create "
-              "-Arguments @{{ CommandLine = '{0}'; CurrentDirectory = '{1}' }}; "
-              "Write-Output ('RET=' + $r.ReturnValue + ' PID=' + $r.ProcessId)").format(cmdline, ROOT)
-    print("用 WMI 起隧道：%s" % Path(cmdline.split('"')[1]).name)
-    print("   " + ps(script).replace("\n", "\n   "))
+    if IS_WIN:
+        cmdline = '"%s" "%s"' % (exe, DAEMON)
+        script = ("$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create "
+                  "-Arguments @{{ CommandLine = '{0}'; CurrentDirectory = '{1}' }}; "
+                  "Write-Output ('RET=' + $r.ReturnValue + ' PID=' + $r.ProcessId)").format(cmdline, ROOT)
+        print("用 WMI 起隧道：%s" % Path(cmdline.split('"')[1]).name)
+        print("   " + ps(script).replace("\n", "\n   "))
+    else:
+        # POSIX：`start_new_session=True` 内部就是 setsid()，让子进程成为**新会话的首进程**，
+        # 从而脱离控制终端与父 shell 的作业控制 —— 这正是 Windows 那边必须绕道 WMI 的原因
+        # （「会话后台作业会被回收」），在 Linux 上由内核直接保证，不需要额外机制。
+        # 0/1/2 全部丢给 DEVNULL：日志由 run_tunnel_daemon.py 自己往 tunnel.log 写，
+        # 留着继承来的 fd 反而会把日志和这个 shell 绑在一起。
+        p = subprocess.Popen([str(exe), str(DAEMON)],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             start_new_session=True, cwd=str(ROOT))
+        print("用 setsid 起隧道：%s（pid %d，新会话，脱离本 shell）" % (Path(exe).name, p.pid))
 
     for i in range(1, 16):
         time.sleep(2)
