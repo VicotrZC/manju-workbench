@@ -313,10 +313,12 @@ def test_asset_wiring():
                 shutil.copytree(src / sub, tmp / sub)
         rules = PA.load_rules(tmp)
         rel = PA.table_for_workflow(tmp, rules, "FF_EP02SC02_S00")
-        _crep, chain = PA.check_chain(tmp, rules, materials="pending", table_rel=rel)
-
         def c3(rules_now=None):
-            rep, _ = PA.check_workflow(tmp, "FF_EP02SC02_S00", rules_now or rules, chain)
+            active_rules = rules_now or rules
+            _crep, active_chain = PA.check_chain(
+                tmp, active_rules, materials="pending", table_rel=rel)
+            rep, _ = PA.check_workflow(
+                tmp, "FF_EP02SC02_S00", active_rules, active_chain)
             return [i for i in rep.items if i["code"] == "CHAIN-03"]
 
         # ── 负向样例 1：真实那条工作流是纯 t2i（没有 LoadImage）──
@@ -325,11 +327,15 @@ def test_asset_wiring():
               any("没有任何参考图输入" in i["msg"] for i in got), True)
 
         # ── 负向样例 2：声明了、但没登记进锁定件的资产 ──
-        # （PRP-02 小电驴 / SCN-02 空街场景 —— 两个资产图都还没出）
+        # 从测试副本中临时移除登记，不能依赖生产项目永远缺这两张资产。
+        missing_rules = json.loads(json.dumps(rules))
+        missing_rules.get("props", {}).pop("PRP-02", None)
+        missing_rules.get("scenes", {}).pop("SCN-02", None)
+        got_missing = c3(missing_rules)
         check("未登记的资产 PRP-02 → 报出来",
-              any("PRP-02" in i["msg"] and "没有登记" in i["msg"] for i in got), True)
+              any("PRP-02" in i["msg"] and "没有登记" in i["msg"] for i in got_missing), True)
         check("未登记的资产 SCN-02 → 报出来",
-              any("SCN-02" in i["msg"] and "没有登记" in i["msg"] for i in got), True)
+              any("SCN-02" in i["msg"] and "没有登记" in i["msg"] for i in got_missing), True)
 
         # ── 正向样例：把参考图接进去，「没有任何参考图输入」必须消失 ──
         # **只测这一条会消失**，不断言"一个错都没有" ——
@@ -403,8 +409,15 @@ def test_license():
                 if wv and isinstance(wv[0], str) and wv[0].strip():
                     used.add(wv[0].strip())
     check("工作流里加载的模型全部有登记（差谁列在下面）", sorted(used - known), [])
-    check("登记表里没有僵尸条目（登了没人用）", sorted(known - used), [])
-    check("登记条目数 = 实际使用数", len(known), len(used))
+
+    # ── 僵尸条目：登记了但没有任何工作流用 ──
+    # ⚠️ `status: "staged"` 的**不算僵尸** —— 那是"许可已核、准备用但还没接入"
+    # （例如 FLUX.2 Klein 正在装）。否则一提前登记就先报错，会逼人不敢先核许可，
+    # 而"先核许可再接入"恰恰是这张表想要的顺序。
+    staged = {m["file"] for m in (reg or {}).get("models") or []
+              if m.get("status") == "staged"}
+    check("登记表里没有僵尸条目（staged 除外）", sorted(known - used - staged), [])
+    check("登记条目数 = 实际使用数 + staged", len(known), len(used) + len(staged))
 
     # ── ① 误报防线：这些**没被禁**，一个都不许命中 ──
     for f in ("qwen_image_2512_fp8_e4m3fn.safetensors",

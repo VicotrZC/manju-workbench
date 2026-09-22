@@ -11,8 +11,15 @@
     "  'conditional' 可商用但有条件，看 notes",
     "  'no'         不可商用",
     "",
+    "status 取值（可省，省略 = active）：",
+    "  'active'  已被工作流加载",
+    "  'staged'  许可已核过、准备用但**还没接入任何工作流**（例如正在下载安装的）。",
+    "            staged 条目不算「僵尸条目」—— 否则一提前登记就先报错，",
+    "            会逼人不敢先核许可，而「先核许可再接入」恰恰是这张表想要的顺序。",
+    "",
     "⚠️ 这里**故意不记 sha256**：许可证跟文件字节无关，哈希只防损坏不防许可变更。",
     "   要防的是「换了个模型却没登记」，靠文件名比对就够了。",
+    "   （**下载**时另需用官方 sha256 校验，那是另一件事，见 08 号文档 §四·补。）",
     "",
     "⚠️ 本表只管模型许可证，不管内容合规（审查 / AI 生成标识 / 备案）。边界见 08 号文档。"
   ],
@@ -20,7 +27,9 @@
   "models": [
     {
       "file": "qwen_image_2512_fp8_e4m3fn.safetensors",
-      "node": ["UNETLoader"],
+      "node": [
+        "UNETLoader"
+      ],
       "role": "图像 · t2i 主模型（首帧路线 A）",
       "upstream": "Qwen/Qwen-Image-2512",
       "url": "https://huggingface.co/Qwen/Qwen-Image-2512",
@@ -32,7 +41,9 @@
     },
     {
       "file": "qwen_image_edit_2511_fp8mixed.safetensors",
-      "node": ["UNETLoader"],
+      "node": [
+        "UNETLoader"
+      ],
       "role": "图像 · edit 主模型（首帧路线 B / 资产图）",
       "upstream": "Qwen/Qwen-Image-Edit-2511",
       "url": "https://huggingface.co/Qwen/Qwen-Image-Edit-2511",
@@ -44,7 +55,9 @@
     },
     {
       "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-      "node": ["CLIPLoader"],
+      "node": [
+        "CLIPLoader"
+      ],
       "role": "图像线 · 文本编码器",
       "upstream": "Qwen/Qwen2.5-VL-7B-Instruct",
       "url": "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct",
@@ -56,7 +69,9 @@
     },
     {
       "file": "qwen_image_vae.safetensors",
-      "node": ["VAELoader"],
+      "node": [
+        "VAELoader"
+      ],
       "role": "图像线 · VAE",
       "upstream": "Qwen-Image 系列（随主模型发布）",
       "url": "https://huggingface.co/Qwen/Qwen-Image-2512",
@@ -68,7 +83,9 @@
     },
     {
       "file": "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors",
-      "node": ["LoraLoaderModelOnly"],
+      "node": [
+        "LoraLoaderModelOnly"
+      ],
       "role": "图像线 · t2i 加速 LoRA（8 步）",
       "upstream": "lightx2v/Qwen-Image-2512-Lightning",
       "url": "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning",
@@ -80,7 +97,9 @@
     },
     {
       "file": "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
-      "node": ["LoraLoaderModelOnly"],
+      "node": [
+        "LoraLoaderModelOnly"
+      ],
       "role": "图像线 · edit 加速 LoRA（8 步）",
       "upstream": "lightx2v/Qwen-Image-Edit-2511-Lightning",
       "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning",
@@ -92,7 +111,9 @@
     },
     {
       "file": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
-      "node": ["UNETLoader"],
+      "node": [
+        "UNETLoader"
+      ],
       "role": "视频 · H3 Ref2VA 主模型",
       "upstream": "MiniMaxAI/MiniMax-H3（经 Comfy-Org/MiniMax-H3 打包）",
       "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
@@ -105,7 +126,9 @@
     },
     {
       "file": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
-      "node": ["LoraLoaderModelOnly"],
+      "node": [
+        "LoraLoaderModelOnly"
+      ],
       "role": "视频 · H3 4 步加速 LoRA（Ref2VA 专用）",
       "upstream": "lightx2v/Minimax-h3-Turbo",
       "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo",
@@ -118,7 +141,9 @@
     },
     {
       "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-      "node": ["CLIPLoader"],
+      "node": [
+        "CLIPLoader"
+      ],
       "role": "视频 · H3 文本编码器",
       "upstream": "Comfy-Org/MiniMax-H3（量化自 Qwen/Qwen3-VL-32B-Instruct）",
       "url": "https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct",
@@ -130,7 +155,9 @@
     },
     {
       "file": "minimax_h3_video_vae_fp16.safetensors",
-      "node": ["VAELoader"],
+      "node": [
+        "VAELoader"
+      ],
       "role": "视频 · H3 视频 VAE",
       "upstream": "Comfy-Org/MiniMax-H3（源 MiniMaxAI/MiniMax-H3）",
       "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
@@ -143,7 +170,9 @@
     },
     {
       "file": "minimax_h3_audio_vae_fp32.safetensors",
-      "node": ["VAELoader"],
+      "node": [
+        "VAELoader"
+      ],
       "role": "视频 · H3 音频 VAE",
       "upstream": "Comfy-Org/MiniMax-H3（源 MiniMaxAI/MiniMax-H3）",
       "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3",
@@ -153,6 +182,54 @@
       "license_verified": true,
       "provenance": "Comfy-Org 打包的 fp32 版",
       "notes": "随 H3 基座，受同样三条硬条件约束。"
+    },
+    {
+      "file": "flux-2-klein-4b-fp8.safetensors",
+      "node": [
+        "UNETLoader"
+      ],
+      "role": "图像 · FLUX.2 Klein 4B 主模型（fp8 蒸馏 4 步）",
+      "upstream": "black-forest-labs/FLUX.2-klein-4b-fp8",
+      "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8",
+      "license": "apache-2.0",
+      "license_url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/LICENSE.md",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "Black Forest Labs 官方 fp8 版（2026-09-22 装，镜像 hf-mirror 下载后按官方 sha256 校验通过）",
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。**同一个仓库里 base 与 distilled 都是 apache-2.0**，这一点和 Qwen-Image 2.1（qwen-research）形成对照。只用 4B；9B 蒸馏版仅 API 提供。采样：4 步 / CFG 1.0 / euler / Flux2Scheduler / 1024²。",
+      "status": "staged"
+    },
+    {
+      "file": "qwen_3_4b.safetensors",
+      "node": [
+        "CLIPLoader"
+      ],
+      "role": "FLUX.2 Klein · 文本编码器（CLIPLoader type=flux2）",
+      "upstream": "Comfy-Org/flux2-klein-4B（Qwen3-4B）",
+      "url": "https://huggingface.co/Comfy-Org/flux2-klein-4B",
+      "license": "apache-2.0",
+      "license_url": "https://huggingface.co/Comfy-Org/flux2-klein-4B",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "Comfy-Org 打包（2026-09-22 装，按官方 sha256 校验通过）",
+      "notes": "**与项目原有的 `qwen_2.5_vl_7b_fp8_scaled` 是两个不同的东西**，不能互相替代：前者是 Qwen3-4B、CLIPLoader 类型选 `flux2`；后者是 Qwen2.5-VL-7B、类型选 `qwen_image`。两个官方仓库（Comfy-Org/flux2-klein-4B、Comfy-Org/z_image_turbo）均为 apache-2.0。",
+      "status": "staged"
+    },
+    {
+      "file": "flux2-vae.safetensors",
+      "node": [
+        "VAELoader"
+      ],
+      "role": "FLUX.2 系列 · VAE",
+      "upstream": "Comfy-Org/flux2-klein-4B",
+      "url": "https://huggingface.co/Comfy-Org/flux2-klein-4B",
+      "license": "apache-2.0",
+      "license_url": "https://huggingface.co/Comfy-Org/flux2-klein-4B",
+      "commercial": "yes",
+      "license_verified": true,
+      "provenance": "Comfy-Org/flux2-klein-4B 的 split_files/vae/flux2-vae.safetensors，sha256 868fe7b3…ce8f3，336211292 B（2026-09-22 装，下载后校验通过）",
+      "notes": "⚠️ **这个文件名有两个不同版本，取错就取到非商用权重** —— 已按 sha256 横向确认：① `Comfy-Org/flux2-klein-4B` 与 `Comfy-Org/vae-text-encorder-for-flux-klein-4b` 里的是**同一份**（sha 868fe7b3…，336211292 B），两仓库均 apache-2.0 ✅；② `Comfy-Org/flux2-dev` 里同名文件是**另一份权重**（sha d64f3a68…，336213556 B），而该仓库整体是 **flux-1-dev-non-commercial-license（非商用）** ❌。**大小只差 2264 字节、文件名一模一样** —— 不看许可永远发现不了。ComfyUI 官方文档给的链接指向的是 ②，本项目已改用 ①。同族的 `Comfy-Org/flux2-dev` 主模型与 `mistral_3_small_flux2_*` 编码器属非商用线，**不得引进**。",
+      "status": "staged"
     }
   ],
   "blocked": [
