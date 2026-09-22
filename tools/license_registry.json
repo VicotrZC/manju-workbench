@@ -196,8 +196,7 @@
       "commercial": "yes",
       "license_verified": true,
       "provenance": "Black Forest Labs 官方 fp8 版（2026-09-22 装，镜像 hf-mirror 下载后按官方 sha256 校验通过）",
-      "notes": "官方仓库 API 的 cardData.license = apache-2.0。**同一个仓库里 base 与 distilled 都是 apache-2.0**，这一点和 Qwen-Image 2.1（qwen-research）形成对照。只用 4B；9B 蒸馏版仅 API 提供。采样：4 步 / CFG 1.0 / euler / Flux2Scheduler / 1024²。",
-      "status": "staged"
+      "notes": "官方仓库 API 的 cardData.license = apache-2.0。**同一个仓库里 base 与 distilled 都是 apache-2.0**，这一点和 Qwen-Image 2.1（qwen-research）形成对照。只用 4B；9B 蒸馏版仅 API 提供。采样：4 步 / CFG 1.0 / euler / Flux2Scheduler / 1024²。"
     },
     {
       "file": "qwen_3_4b.safetensors",
@@ -212,8 +211,7 @@
       "commercial": "yes",
       "license_verified": true,
       "provenance": "Comfy-Org 打包（2026-09-22 装，按官方 sha256 校验通过）",
-      "notes": "**与项目原有的 `qwen_2.5_vl_7b_fp8_scaled` 是两个不同的东西**，不能互相替代：前者是 Qwen3-4B、CLIPLoader 类型选 `flux2`；后者是 Qwen2.5-VL-7B、类型选 `qwen_image`。两个官方仓库（Comfy-Org/flux2-klein-4B、Comfy-Org/z_image_turbo）均为 apache-2.0。",
-      "status": "staged"
+      "notes": "**与项目原有的 `qwen_2.5_vl_7b_fp8_scaled` 是两个不同的东西**，不能互相替代：前者是 Qwen3-4B、CLIPLoader 类型选 `flux2`；后者是 Qwen2.5-VL-7B、类型选 `qwen_image`。两个官方仓库（Comfy-Org/flux2-klein-4B、Comfy-Org/z_image_turbo）均为 apache-2.0。"
     },
     {
       "file": "flux2-vae.safetensors",
@@ -228,8 +226,7 @@
       "commercial": "yes",
       "license_verified": true,
       "provenance": "Comfy-Org/flux2-klein-4B 的 split_files/vae/flux2-vae.safetensors，sha256 868fe7b3…ce8f3，336211292 B（2026-09-22 装，下载后校验通过）",
-      "notes": "⚠️ **这个文件名有两个不同版本，取错就取到非商用权重** —— 已按 sha256 横向确认：① `Comfy-Org/flux2-klein-4B` 与 `Comfy-Org/vae-text-encorder-for-flux-klein-4b` 里的是**同一份**（sha 868fe7b3…，336211292 B），两仓库均 apache-2.0 ✅；② `Comfy-Org/flux2-dev` 里同名文件是**另一份权重**（sha d64f3a68…，336213556 B），而该仓库整体是 **flux-1-dev-non-commercial-license（非商用）** ❌。**大小只差 2264 字节、文件名一模一样** —— 不看许可永远发现不了。ComfyUI 官方文档给的链接指向的是 ②，本项目已改用 ①。同族的 `Comfy-Org/flux2-dev` 主模型与 `mistral_3_small_flux2_*` 编码器属非商用线，**不得引进**。",
-      "status": "staged"
+      "notes": "⚠️ **这个文件名有两个不同版本，取错就取到非商用权重** —— 已按 sha256 横向确认：① `Comfy-Org/flux2-klein-4B` 与 `Comfy-Org/vae-text-encorder-for-flux-klein-4b` 里的是**同一份**（sha 868fe7b3…，336211292 B），两仓库均 apache-2.0 ✅；② `Comfy-Org/flux2-dev` 里同名文件是**另一份权重**（sha d64f3a68…，336213556 B），而该仓库整体是 **flux-1-dev-non-commercial-license（非商用）** ❌。**大小只差 2264 字节、文件名一模一样** —— 不看许可永远发现不了。ComfyUI 官方文档给的链接指向的是 ②，本项目已改用 ①。同族的 `Comfy-Org/flux2-dev` 主模型与 `mistral_3_small_flux2_*` 编码器属非商用线，**不得引进**。"
     }
   ],
   "blocked": [
