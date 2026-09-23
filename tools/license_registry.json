@@ -234,7 +234,7 @@
       "match": "qwen_image_2.1",
       "license": "qwen-research",
       "url": "https://huggingface.co/Qwen/Qwen-Image-2.1",
-      "why": "**仅限研究或评估用途**。原文（官方仓库当前 LICENSE，Release Date 2026-09-20，主体 Hangzhou Tongyi Laboratory Technology Co., Ltd.，适用中国法律/杭州法院专属管辖）：§1.i「Non-Commercial」= for research or evaluation purposes only；§2.a 授权范围写明 FOR NON-COMMERCIAL PURPOSES ONLY；§2.b 未经单独商业许可不得将 Materials 用于任何商业目的（申请 model-business@notice.qwencloud.com）；§9.a 未明确约定的用法一律须另行申请。⚠️ Qwen 官方 2026-09-22 澄清「产物不属于 licensed Materials，用户保留所生成内容的权利」——那回答的是**产物归属**，不是**能否用模型商用**。两者独立：许可限制的是 Materials 的使用，而用模型出图就是使用 Materials。想商用（出图卖钱或做生成服务）仍须申请许可。其转存 Comfy-Org/Qwen-Image-2.1 同为 qwen-research，**转存不改许可**。同厂的 Qwen-Image-2512 是 apache-2.0 —— 同系列不同许可，这就是不许按名字推断的原因。"
+      "why": "许可为 qwen-research（官方仓库 LICENSE，Release Date 2026-09-20，Hangzhou Tongyi Laboratory Technology Co., Ltd.，适用中国法律/杭州法院专属管辖）。§1.i「Non-Commercial」= research or evaluation purposes only；§2.a 授权范围 FOR NON-COMMERCIAL PURPOSES ONLY；§2.b 未经单独商业许可不得将 Materials 用于 any commercial purpose（model-business@notice.qwencloud.com）；§9.a 未明确约定的用法须另行申请。⚠️ 产物归属：Qwen 官方 2026-09-22 澄清「产物不属于 licensed Materials，用户保留所生成内容的权利」，与 §1.f/§5.a 自洽 —— **图是你的**。⚠️ 但「用本模型出图、目的为商业」是否构成 §2.b 的商业使用，**存在真实解释空间**：「commercial purpose」可读作'使用行为的目的'（保守，须申请）或'对 Materials 本身的商业化'（宽松，可用）。**本表按保守处理**：未取得书面许可前视为不可用。转存 Comfy-Org/Qwen-Image-2.1 同为 qwen-research，转存不改许可。同厂 Qwen-Image-2512 为 apache-2.0 —— 同系列不同许可，不许按名字推断。"
     }
   ]
 }
