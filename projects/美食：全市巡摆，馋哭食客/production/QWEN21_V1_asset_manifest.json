@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "purpose": "EP02 现代菜市场买肉故事的国产三维动画画风测试资产",
+  "story_setting": "当代住宅街道与菜市场；现代便装、现代电瓶车。只改变画面渲染风格。",
+  "style_brief": "背景与服装保持当代；明显国产三维动画剧集质感（stylized 3D donghua），成人自然比例、略夸张的动画化脸部结构与眼神、柔和动画着色和绘制纹理，不走真人摄影或写实皮肤；辅以精细材质、电影式体积光与克制冷暖调色。",
+  "generator": {
+    "model": "Qwen-Image 2.1",
+    "runtime": "ComfyUI 0.37.0",
+    "unet": "qwen_image_2.1_int8_convrot.safetensors",
+    "text_encoder": "qwen3vl_8b_int8_convrot.safetensors",
+    "vae": "qwen_image_2.1_vae_bf16.safetensors",
+    "edit_settings": {
+      "steps": 35,
+      "cfg": 1,
+      "sampler": "euler",
+      "scheduler": "simple"
+    }
+  },
+  "assets": [
+    {
+      "id": "Q21-CHR-01-body",
+      "path": "assets/CHR/QWEN21_V1/CHR01_body_qwen21_v1.png",
+      "source": ["assets/CHR/PRODUCTION/C01_body_master.png", "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png"],
+      "seed": 920241,
+      "identity_lock": "年轻男性，黑色 T 恤、深色长裤、白鞋，左眉外上方有旧疤"
+    },
+    {
+      "id": "Q21-CHR-01-face",
+      "path": "assets/CHR/QWEN21_V1/CHR01_face_qwen21_v1.png",
+      "source": "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+      "seed": 920242,
+      "identity_lock": "保留闫清脸型、短黑发和左眉外上方旧疤"
+    },
+    {
+      "id": "Q21-CHR-02-vendor",
+      "path": "assets/CHR/QWEN21_V1/CHR02_vendor_qwen21_v1.png",
+      "source": "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+      "seed": 920243,
+      "identity_lock": "中年摊主、藏青工装短袖、深棕防水围裙"
+    },
+    {
+      "id": "Q21-PRP-02-ebike",
+      "path": "assets/PRP/QWEN21_V1/PRP02_ebike_qwen21_v1.png",
+      "source": "assets/PRP/PRP-02_ebike_master.png",
+      "seed": 920244,
+      "continuity_lock": "蓝灰色、踏板式电瓶车、单人座、后货架；生成侧视图前灯朝画面右侧"
+    },
+    {
+      "id": "Q21-SCN-01-stall",
+      "path": "assets/SCN/QWEN21_V1/SCN01_pork_stall_qwen21_v1.png",
+      "source": "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+      "seed": 920245,
+      "layout_lock": "正面猪肉摊，五盏红灯、横杆挂肉、右侧三根红肠、中央木门、长柜台、左下白箱、右下蓝筐与白桶"
+    },
+    {
+      "id": "Q21-SCN-02-street",
+      "path": "assets/SCN/QWEN21_V1/SCN02_street_qwen21_v1.png",
+      "source": "assets/SCN/SCN-02_street_master.png",
+      "seed": 920246,
+      "layout_lock": "现代双车道、固定消失点、成熟行道树、围栏与右侧停车棚，凌晨蓝色环境光"
+    },
+    {
+      "id": "Q21-SCN-03-entry",
+      "path": "assets/SCN/QWEN21_V1/SCN03_market_entry_qwen21_v1.png",
+      "source": "assets/SCN/SCN-03_market_entry_master_codex_v1.png",
+      "seed": 920247,
+      "layout_lock": "现代街道进入有顶市场，入口通道可骑行，猪肉摊位于进入后的左侧"
+    },
+    {
+      "id": "Q21-PRP-03-pork",
+      "path": "assets/PRP/QWEN21_V1/PRP03_black_pork_qwen21_v1.png",
+      "source": "assets/PRP/PRP-03_black_pork_codex_v1.png",
+      "seed": 920248,
+      "appearance_lock": "黑皮边缘与同一肥瘦纹理，不代表五十斤成品体积"
+    },
+    {
+      "id": "Q21-PRP-01-phone",
+      "path": "assets/PRP/QWEN21_V1/PRP01_phone_qwen21_v1.png",
+      "source": "assets/PRP/PRP-01_phone_pig_video_codex_v1.png",
+      "seed": 920249,
+      "appearance_lock": "黑色手机；屏幕里一车活猪由卡车载入场地"
+    }
+  ],
+  "first_frames": [
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_S00_outbound_v1_00001_.png",
+      "source_ids": ["Q21-SCN-02-street", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-PRP-02-ebike"],
+      "seed": 920301,
+      "canvas": [1376, 768]
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_BR01_market_entry_v1_00001_.png",
+      "source_ids": ["Q21-SCN-03-entry", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-CHR-02-vendor", "Q21-PRP-02-ebike"],
+      "seed": 920302,
+      "canvas": [1376, 768]
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_S01_ask_price_v2.png",
+      "source_ids": ["Q21-SCN-01-stall", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-CHR-02-vendor", "Q21-PRP-02-ebike", "Q21-PRP-03-pork"],
+      "seed": 920304,
+      "canvas": [1376, 768],
+      "style_revision": "明显动画化的脸部结构、柔和动画着色；排除 v1 写实倾向首帧"
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_S03_phone_v1.png",
+      "source_ids": ["Q21-SCN-01-stall", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-CHR-02-vendor", "Q21-PRP-01-phone"],
+      "seed": 920305,
+      "canvas": [1376, 768],
+      "style_revision": "同一现代三维动画风格；手机屏幕作为独立画面证据"
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_S04_order_v1.png",
+      "source_ids": ["Q21-SCN-01-stall", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-CHR-02-vendor", "Q21-PRP-02-ebike", "Q21-PRP-03-pork"],
+      "seed": 920306,
+      "canvas": [1376, 768],
+      "style_revision": "近景手机笑点后切回固定中景下单；强化动画化角色造型"
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_BR04_load_v2.png",
+      "source_ids": ["Q21-SCN-03-entry", "Q21-SCN-01-stall", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-PRP-02-ebike"],
+      "seed": 920308,
+      "canvas": [1376, 768],
+      "style_revision": "只有一包肉在主角手里；车后架明确留空；由肉包交接实帧作连续性参考"
+    },
+    {
+      "path": "outputs/QWEN21_STYLE_V1/Q21_KEYFRAME_S01_return_home_v1.png",
+      "source_ids": ["Q21-SCN-02-street", "Q21-CHR-01-body", "Q21-CHR-01-face", "Q21-PRP-02-ebike"],
+      "seed": 920309,
+      "canvas": [1376, 768],
+      "state_reference": "outputs/QWEN21_STYLE_V1/BR05_market_exit/BR05_market_exit_end_frame_n106.png",
+      "style_revision": "菜市场出口到现代住宅街道的计划机位切换；同一主角、车辆和后架唯一肉包"
+    }
+  ]
+}

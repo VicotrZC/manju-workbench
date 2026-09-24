@@ -1,0 +1,832 @@
+{
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      }
+    },
+    {
+      "id": 2,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        40,
+        170
+      ],
+      "size": [
+        420,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            9,
+            11
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      }
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        420,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      }
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            18,
+            20
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        550
+      ],
+      "size": [
+        420,
+        58
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            4,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      }
+    },
+    {
+      "id": 6,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        650
+      ],
+      "size": [
+        320,
+        320
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "BR01_market_entry_end_frame_n106.png",
+        "image"
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      }
+    },
+    {
+      "id": 7,
+      "type": "MiniMaxH3ReferenceToVideo",
+      "pos": [
+        520,
+        40
+      ],
+      "size": [
+        720,
+        560
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 4
+        },
+        {
+          "name": "ref_images.ref_image_0",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            10
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            16
+          ],
+          "slot_index": 1
+        }
+      ],
+      "widgets_values": [
+        "subject_definitions:\n<Subject 1> is the young man riding the blue-gray step-through electric scooter in <Picture 1>. Preserve his black shirt, dark trousers, white shoes, body, hair and the exact scooter design.\n<Picture 1> is the actual final frame of the previous shot. It fixes the camera, aisle, stall location, screen direction, lighting and the rider's current position.\n\nsummary:\nHe eases off the throttle, turns toward the pork counter on his left and stops beside the stall.\n\nretention_analysis:\nContinue directly from <Picture 1> with no cut and no reset. Keep the same rider, scooter and market aisle. The pork stall stays on frame left with its red lamps, white counter and hanging pork visible. Keep its sign text out of focus and unreadable. The scooter's rear rack remains empty. No extra rider, no duplicate vehicle, no change of clothes, no teleport, no reverse movement and no camera orbit.\n\ndetailed_description:\nOne continuous rear three-quarter follow shot, 107 frames at 24 fps. At 0.0 seconds the rider is still rolling forward from the exact supplied frame. During the first second he gently reduces speed and steers left toward the pork counter. From 1.0 to 2.6 seconds the scooter moves the last few meters along the aisle, the front wheel turns slightly toward the stall and the rider looks toward the butcher. From 2.6 to 3.5 seconds he applies the brake and comes to a complete controlled stop parallel to the counter, about one meter away. He stays seated with both hands on the bars; one foot reaches the ground for balance. From 3.5 to 4.46 seconds the scooter remains stationary and the rider looks at the pork stall, ready to dismount in the next shot. Preserve the same light, geometry and mature stylized 3D animation rendering. The parked bike does not disappear and the rear rack stays empty. No camera cut, no framing change, no new sign text, no subtitles and no morphing.\n\noverall_soundscape:\nNo intelligible speech. Soft electric motor deceleration and quiet market ambience.\n\nnon_diegetic_music:\nnone",
+        1376,
+        768,
+        107,
+        "match"
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+      }
+    },
+    {
+      "id": 8,
+      "type": "RandomNoise",
+      "pos": [
+        1280,
+        40
+      ],
+      "size": [
+        320,
+        82
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        2026092401,
+        "fixed"
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      }
+    },
+    {
+      "id": 9,
+      "type": "BasicGuider",
+      "pos": [
+        1280,
+        170
+      ],
+      "size": [
+        320,
+        46
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      }
+    },
+    {
+      "id": 10,
+      "type": "KSamplerSelect",
+      "pos": [
+        1280,
+        260
+      ],
+      "size": [
+        320,
+        58
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            14
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "res_multistep"
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      }
+    },
+    {
+      "id": 11,
+      "type": "BasicScheduler",
+      "pos": [
+        1280,
+        360
+      ],
+      "size": [
+        320,
+        106
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            15
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        "simple",
+        4,
+        1.0
+      ],
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      }
+    },
+    {
+      "id": 12,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1660,
+        40
+      ],
+      "size": [
+        300,
+        130
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 12
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 13
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 14
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 15
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            17,
+            19
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      }
+    },
+    {
+      "id": 13,
+      "type": "VAEDecode",
+      "pos": [
+        1660,
+        220
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 17
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 14,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1660,
+        300
+      ],
+      "size": [
+        220,
+        46
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            22
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [],
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      }
+    },
+    {
+      "id": 15,
+      "type": "CreateVideo",
+      "pos": [
+        1960,
+        40
+      ],
+      "size": [
+        300,
+        106
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 21
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            23
+          ],
+          "slot_index": 0
+        }
+      ],
+      "widgets_values": [
+        24.0
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      }
+    },
+    {
+      "id": 16,
+      "type": "SaveVideo",
+      "pos": [
+        1960,
+        200
+      ],
+      "size": [
+        420,
+        300
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 23
+        }
+      ],
+      "outputs": [],
+      "widgets_values": [
+        "qwen21_style_v1/BR02_approach_stop/BR02_approach_stop_h3",
+        "auto",
+        "auto"
+      ],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      }
+    },
+    {
+      "id": 17,
+      "type": "MarkdownNote",
+      "pos": [
+        2420,
+        40
+      ],
+      "size": [
+        600,
+        720
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "widgets_values": [
+        "# Scene 01 v3`n`nLocked scene-master first frame; ambient sound only; fixed dialog added in post."
+      ],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      3,
+      0,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      4,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      5,
+      0,
+      7,
+      2,
+      "VAE"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      3,
+      "IMAGE"
+    ],
+    [
+      9,
+      2,
+      0,
+      9,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      7,
+      0,
+      9,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      11,
+      2,
+      0,
+      11,
+      0,
+      "MODEL"
+    ],
+    [
+      12,
+      8,
+      0,
+      12,
+      0,
+      "NOISE"
+    ],
+    [
+      13,
+      9,
+      0,
+      12,
+      1,
+      "GUIDER"
+    ],
+    [
+      14,
+      10,
+      0,
+      12,
+      2,
+      "SAMPLER"
+    ],
+    [
+      15,
+      11,
+      0,
+      12,
+      3,
+      "SIGMAS"
+    ],
+    [
+      16,
+      7,
+      1,
+      12,
+      4,
+      "LATENT"
+    ],
+    [
+      17,
+      12,
+      0,
+      13,
+      0,
+      "LATENT"
+    ],
+    [
+      18,
+      4,
+      0,
+      13,
+      1,
+      "VAE"
+    ],
+    [
+      19,
+      12,
+      0,
+      14,
+      0,
+      "LATENT"
+    ],
+    [
+      20,
+      5,
+      0,
+      14,
+      1,
+      "VAE"
+    ],
+    [
+      21,
+      13,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      14,
+      0,
+      15,
+      1,
+      "AUDIO"
+    ],
+    [
+      23,
+      15,
+      0,
+      16,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
