@@ -1,0 +1,726 @@
+{
+  "schema_version": 1,
+  "project": "美食：全市巡摆，馋哭食客",
+  "enforce_video_workflows": true,
+  "current_route": "V2_CODEX_S03_HAND_ONLY_V3_TEST",
+  "blocked_routes": {
+    "API_H3_V1": [
+      "参考片帧进入了首帧生成来源",
+      "正式项目资产没有形成可追溯的逐镜引用",
+      "交接帧时间早于上一段实际剪切终点，造成倒跳",
+      "重新生成的跨镜首帧没有通过项目资产来源门禁"
+    ]
+  },
+  "forbidden_generation_sources": [
+    "assets/reference/",
+    "assets/CHR/FILM/",
+    ".work/reference_frames/",
+    "mmexport1789479809107.mp4",
+    "reference_01.png",
+    "reference_02.png",
+    "reference_03.png",
+    "reference_04.png"
+  ],
+  "approved_assets": {
+    "CHR-01-body": {
+      "status": "approved",
+      "path": "assets/CHR/PRODUCTION/C01_body_master.png",
+      "role": "主角体型、服装、比例"
+    },
+    "CHR-01-face": {
+      "status": "approved",
+      "path": "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+      "role": "主角脸、发型、身份"
+    },
+    "CHR-02-body": {
+      "status": "approved",
+      "path": "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+      "role": "摊主体型、脸、服装；用户确认用于本次单镜测试",
+      "derived_from": "assets/CHR/CHR02_butcher_body_neutral_00009__nohead.png",
+      "approval_record": "2026-09-23 用户回复“继续吧”，确认摊主候选与 S01 首帧进入单镜视频测试"
+    },
+    "PRP-01-phone": {
+      "status": "approved",
+      "path": "assets/PRP/PRP-01_phone_pig_video_codex_v1.png",
+      "role": "S03 手机道具及屏幕活猪进场画面参考；本次视觉测试使用",
+      "approval_record": "2026-09-23 用户授权缺少资产用内置生图补齐并继续逐镜测试；仅作本轮视觉测试基准"
+    },
+    "PRP-02-ebike": {
+      "status": "approved",
+      "path": "assets/PRP/PRP-02_ebike_master.png",
+      "role": "电瓶车外形、颜色、比例"
+    },
+    "PRP-03-black-pork": {
+      "status": "approved",
+      "path": "assets/PRP/PRP-03_black_pork_codex_v1.png",
+      "role": "本次视觉测试的黑猪肉颜色与肥瘦纹理参考；供 S02 至 S04 保持同一肉块外观",
+      "approval_record": "2026-09-23 用户要求缺失资产用内置生图并继续逐镜测试；本资产仅作为本轮视觉测试基准，非五十斤成品体积"
+    },
+    "SCN-01-master": {
+      "status": "approved",
+      "path": "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+      "role": "猪肉摊观感与固定陈设"
+    },
+    "SCN-01-multiview": {
+      "status": "approved",
+      "path": "assets/SCN/SCN-pork_stall_9grid_labelled.png",
+      "role": "猪肉摊多视图几何"
+    },
+    "SCN-01-cam-front": {
+      "status": "approved",
+      "path": "assets/SCN/BLENDER_PORK_STALL/CAM01_FRONT_WIDE.png",
+      "role": "正面广角机位"
+    },
+    "SCN-01-cam-approach-left": {
+      "status": "approved",
+      "path": "assets/SCN/BLENDER_PORK_STALL/CAM02_APPROACH_LEFT.png",
+      "role": "左侧接近机位"
+    },
+    "SCN-01-cam-counter": {
+      "status": "approved",
+      "path": "assets/SCN/BLENDER_PORK_STALL/CAM06_COUNTER_CLOSE.png",
+      "role": "案台近景机位"
+    },
+    "SCN-01-cam-aisle": {
+      "status": "approved",
+      "path": "assets/SCN/BLENDER_PORK_STALL/CAM07_AISLE_ESTABLISH.png",
+      "role": "市场通道建立镜头"
+    },
+    "SCN-02-street": {
+      "status": "approved",
+      "path": "assets/SCN/SCN-02_street_master.png",
+      "role": "凌晨街道场景"
+    },
+    "SCN-03-market-entry": {
+      "status": "approved",
+      "path": "assets/SCN/SCN-03_market_entry_master_codex_v1.png",
+      "role": "街道通向菜市入口及猪肉摊通道的连续空间；本轮补桥段测试基准",
+      "derived_from": [
+        "assets/SCN/SCN-02_street_master.png",
+        "outputs/V2_CODEX_SCN02_S00_outbound_v2/S00_outbound_v2_end_frame_n191.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM07_AISLE_ESTABLISH.png"
+      ]
+    }
+  },
+  "workflow_registry": {
+    "V2_CODEX_EP02SC01_S01_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "用户确认内置生图的摊主候选和 S01 首帧；只生成这一镜的 H3 视频，检查场景稳定和角色脸部，不验声音。",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "CHR-02-body",
+        "SCN-01-master",
+        "SCN-01-multiview",
+        "SCN-01-cam-front"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM01_FRONT_WIDE.png",
+        "assets/SCN/SCN-pork_stall_9grid_labelled.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S01_codex_preview_v2.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S01_codex_preview_v2.png",
+      "shot_camera": "CAM1",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S01",
+      "video_output": "outputs/V2_CODEX_S01/V2_CODEX_EP02SC01_S01_h3_00001_.mp4",
+      "handoff_frame": "outputs/V2_CODEX_S01/S01_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175
+    },
+    "V2_CODEX_EP02SC01_S02_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "在 S01 单镜画面检查后，以实际末帧为连续性锚点，生成 B2 黑猪肉介绍与闫清验肉动作；忽略声音，只检查画面、场景和人物一致性。",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "CHR-02-body",
+        "PRP-03-black-pork",
+        "SCN-01-master",
+        "SCN-01-multiview",
+        "SCN-01-cam-counter"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/PRP/PRP-03_black_pork_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/SCN-pork_stall_9grid_labelled.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM06_COUNTER_CLOSE.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S02_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S02_codex_preview.png",
+      "shot_camera": "CAM2",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S02",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S01_h3",
+        "previous_video": "outputs/V2_CODEX_S01/V2_CODEX_EP02SC01_S01_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S01/S01_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "video_output": "outputs/V2_CODEX_S02/V2_CODEX_EP02SC01_S02_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S02/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S02/S02_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175,
+      "qa_summary": "场景锚点、人物身份与肉盘在片内稳定；H3 实际开场帧会重解释输入静帧，构图/手势并非像素一致。最终剪辑以视频实际 n=0 为镜头开场，后续首帧始终从上镜实际末帧构造。"
+    },
+    "V2_CODEX_EP02SC01_S03_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "B3 一镜到底：摊主举手机证明新鲜，屏幕中的活猪卡车驶入场地，闫清先愣后笑；保留原剧本对白与旁白，视觉只做这一个连续动作。",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "CHR-02-body",
+        "PRP-01-phone",
+        "PRP-03-black-pork",
+        "SCN-01-master",
+        "SCN-01-multiview",
+        "SCN-01-cam-counter"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/PRP/PRP-01_phone_pig_video_codex_v1.png",
+        "assets/PRP/PRP-03_black_pork_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/SCN-pork_stall_9grid_labelled.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM06_COUNTER_CLOSE.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S03_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S03_codex_preview.png",
+      "shot_camera": "CAM3",
+      "fps": 24,
+      "frames": 294,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S03",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S02_h3",
+        "previous_video": "outputs/V2_CODEX_S02/V2_CODEX_EP02SC01_S02_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S02/S02_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "video_output": "outputs/V2_CODEX_S03/V2_CODEX_EP02SC01_S03_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S03/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S03/S03_end_frame_n293.png",
+      "handoff_frame_index": 293,
+      "end_frame_exclusive": 294,
+      "qa_summary": "人物身份、手机道具、猪肉托盘和摊位在片内稳定；闫清完成先愣后笑。摊主后半段被模型带出明显笑容，与剧本‘认真证明’不符，因此保留此版并针对摊主保持中性表情再生成一个比较版。"
+    },
+    "V2_CODEX_EP02SC01_S03_v2_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "S03 定向修正候选：只强化摊主全程认真中性、不跟着闫清发笑；其余 B3 一镜到底、镜头、首帧和连续性输入不变。",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "CHR-02-body",
+        "PRP-01-phone",
+        "PRP-03-black-pork",
+        "SCN-01-master",
+        "SCN-01-multiview",
+        "SCN-01-cam-counter"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/PRP/PRP-01_phone_pig_video_codex_v1.png",
+        "assets/PRP/PRP-03_black_pork_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/SCN-pork_stall_9grid_labelled.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM06_COUNTER_CLOSE.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S03_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S03_codex_preview.png",
+      "shot_camera": "CAM3",
+      "fps": 24,
+      "frames": 294,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S03_v2",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S02_h3",
+        "previous_video": "outputs/V2_CODEX_S02/V2_CODEX_EP02SC01_S02_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S02/S02_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "video_output": "outputs/V2_CODEX_S03_v3/V2_CODEX_EP02SC01_S03_v3_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S03_v3/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S03_v3/S03_v3_end_frame_n293.png",
+      "handoff_frame_index": 293,
+      "end_frame_exclusive": 294,
+      "handoff_time_s": 12.2083,
+      "previous_assembly_end_s": 12.25,
+      "selected_for_continuity_chain": true,
+      "qa_summary": "本版摊主脸不入镜，只保留带疤右手与手机；手机画面留在屏内，闫清完成由认真到克制微笑，摊位背景稳定。前两版摊主跟笑，已保留但不选入接片。H3 开场仍可能重绘输入静帧，最终以实际视频 n=0 为镜头开场。"
+    },
+    "V2_CODEX_EP02SC01_S03_v3_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "B3 单镜修正版：匹配原戏，只呈现闫清反应、手机屏幕和摊主带疤手臂，摊主脸不入镜；保持一镜到底与同一摊位。",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "CHR-02-body",
+        "PRP-01-phone",
+        "PRP-03-black-pork",
+        "SCN-01-master",
+        "SCN-01-multiview",
+        "SCN-01-cam-counter"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/PRP/PRP-01_phone_pig_video_codex_v1.png",
+        "assets/PRP/PRP-03_black_pork_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/SCN/SCN-pork_stall_9grid_labelled.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM06_COUNTER_CLOSE.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S03_codex_preview_v3.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S03_codex_preview_v3.png",
+      "shot_camera": "CAM3",
+      "fps": 24,
+      "frames": 294,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S03_v3",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S02_h3",
+        "previous_video": "outputs/V2_CODEX_S02/V2_CODEX_EP02SC01_S02_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S02/S02_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      }
+    },
+    "V2_CODEX_EP02SC01_S04A_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "B4 order and wrapping action, as one fixed-camera H3 shot; review visuals only, not audio.",
+      "asset_ids": [
+        "CHR-01-face",
+        "CHR-02-body",
+        "SCN-01-master",
+        "PRP-03-black-pork"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/CHR/PRODUCTION/C04_body_master_codex_v1.png",
+        "assets/SCN/API_LOCK_V1/SCN01_pork_stall_master.png",
+        "assets/PRP/PRP-03_black_pork_codex_v1.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S04A_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S04A_codex_preview.png",
+      "shot_camera": "CAM1",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S04A",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S03_v3_h3",
+        "previous_video": "outputs/V2_CODEX_S03_v3/V2_CODEX_EP02SC01_S03_v3_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S03_v3/S03_v3_end_frame_n293.png",
+        "fps": 24,
+        "handoff_frame_index": 293,
+        "previous_assembly_end_frame_exclusive": 294,
+        "handoff_time_s": 12.2083,
+        "previous_assembly_end_s": 12.25
+      },
+      "video_output": "outputs/V2_CODEX_S04A/V2_CODEX_EP02SC01_S04A_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S04A/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S04A/S04A_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175,
+      "qa_summary": "175 frames at 24fps (7.29s), 1376x768. Five sampled frames keep both faces, wardrobe, counter, door, hanging meat, sausages, and screen sides stable. The butcher completes one paper parcel; no bike appears; parcel remains on counter at actual n=174. H3 opening composition closely follows the new keyframe. Four red pendant lamps are visible in this crop; shot-to-shot stall continuity is acceptable for a new medium-wide camera cut. Selected as the S04B continuity source; audio ignored.",
+      "selected_for_continuity_chain": true
+    },
+    "V2_CODEX_EP02SC01_S04B_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "B4 transfer and loading action: receive the same wrapped pork parcel and strap it on the approved e-bike rear rack; visual review only.",
+      "asset_ids": [
+        "PRP-02-ebike",
+        "SCN-01-cam-aisle"
+      ],
+      "source_paths": [
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM07_AISLE_ESTABLISH.png"
+      ],
+      "load_images": [
+        "EP02_SCN01_S04B_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN01_S04B_codex_preview.png",
+      "shot_camera": "CAM7",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S04B",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S04A_h3",
+        "previous_video": "outputs/V2_CODEX_S04A/V2_CODEX_EP02SC01_S04A_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S04A/S04A_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "video_output": "outputs/V2_CODEX_S04B/V2_CODEX_EP02SC01_S04B_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S04B/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S04B/S04B_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175,
+      "qa_summary": "175 frames at 24fps (7.29s), 1376x768. Five sampled frames preserve the stall, screen direction, faces and one wrapped parcel. Yan Qing receives the parcel, moves to the approved e-bike, places it on the rear rack and secures it with one plain strap; the bicycle stays still through the final frame. Selected as the exact same-camera handoff into the departure shot; audio ignored.",
+      "selected_for_continuity_chain": true
+    },
+    "V2_CODEX_EP02SC01_S04C_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "B4 departure: continue directly from S04B actual tail; mount the loaded e-bike and ride out through the market aisle.",
+      "asset_ids": [
+        "PRP-02-ebike",
+        "SCN-01-cam-aisle"
+      ],
+      "source_paths": [
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/BLENDER_PORK_STALL/CAM07_AISLE_ESTABLISH.png"
+      ],
+      "load_images": [
+        "S04B_end_frame_n174.png"
+      ],
+      "first_frame_mode": "inherited_tail",
+      "first_frame": "outputs/V2_CODEX_S04B/S04B_end_frame_n174.png",
+      "shot_camera": "CAM7",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_S04C",
+      "continuity_source": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S04B_h3",
+        "previous_video": "outputs/V2_CODEX_S04B/V2_CODEX_EP02SC01_S04B_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S04B/S04B_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "video_output": "outputs/V2_CODEX_S04C/V2_CODEX_EP02SC01_S04C_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_S04C/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_S04C/S04C_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175,
+      "qa_summary": "175 frames at 24fps (7.29s), 1376x768. Actual opening frame inherits S04B n=174 and preserves the same camera/stall geometry. The rider mounts and rides down the aisle; butcher remains at the stall. The single wrapped parcel remains on the rear seat/rack through the sampled frames and the rider recedes without turning back. Selected as the continuity source for the outdoor ride-home cut; audio ignored.",
+      "handoff": {
+        "previous_workflow": "V2_CODEX_EP02SC01_S04B_h3",
+        "previous_video": "outputs/V2_CODEX_S04B/V2_CODEX_EP02SC01_S04B_h3_00001_.mp4",
+        "handoff_frame": "outputs/V2_CODEX_S04B/S04B_end_frame_n174.png",
+        "fps": 24,
+        "handoff_frame_index": 174,
+        "previous_assembly_end_frame_exclusive": 175,
+        "handoff_time_s": 7.25,
+        "previous_assembly_end_s": 7.2917
+      },
+      "selected_for_continuity_chain": true
+    },
+    "V2_CODEX_EP02SC02_S01_return_home_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "新增返家镜头：闫清骑同一辆载有一包肉的电动车沿 SCN-02 街道回家；只评估画面、角色与场景一致性。",
+      "asset_ids": [
+        "CHR-01-face",
+        "PRP-02-ebike",
+        "SCN-02-street"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-02_street_master.png"
+      ],
+      "keyframe_source_paths": [
+        "outputs/V2_CODEX_S04C/S04C_end_frame_n174.png",
+        "assets/SCN/SCN-02_street_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png"
+      ],
+      "load_images": [
+        "EP02_SCN02_S01_return_home_codex_preview.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN02_S01_return_home_codex_preview.png",
+      "shot_camera": "CAM1_return_home",
+      "fps": 24,
+      "frames": 175,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_SCN02_S01_return_home",
+      "video_output": "outputs/V2_CODEX_SCN02_S01_return_home/V2_CODEX_EP02SC02_S01_return_home_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_SCN02_S01_return_home/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_SCN02_S01_return_home/S01_return_home_end_frame_n174.png",
+      "handoff_frame_index": 174,
+      "end_frame_exclusive": 175,
+      "keyframe_provenance_note": "outputs/EP02_SCN02_S01_return_home_codex_preview.md",
+      "selected_for_continuity_chain": true,
+      "selected_video_output": "outputs/V2_CODEX_SCN02_S01_return_home/V2_CODEX_EP02SC02_S01_return_home_h3_select_n064.mp4",
+      "selected_actual_video_opening_frame": "outputs/V2_CODEX_SCN02_S01_return_home/review_frames/selected_first_n064.png",
+      "selected_start_frame_index": 64,
+      "selected_frames": 111,
+      "selected_duration_s": 4.625,
+      "selected_handoff_frame": "outputs/V2_CODEX_SCN02_S01_return_home/S01_return_home_end_frame_n174.png",
+      "selected_handoff_frame_index": 110,
+      "selected_end_frame_exclusive": 111,
+      "qa_summary": "Selected output trims raw frames 0-63, which form an unplanned close side pass/reframe and briefly add a front basket. Five samples from raw n=64,92,119,146,174 preserve the same dawn street geometry, rider seen from behind, one tan parcel on the rack, and uninterrupted forward travel. Identity face is not judgeable in the selected rear view; no visual drift detected in the sampled frames. The original 175-frame H3 render remains preserved for comparison; final assembly must use selected_video_output and must not insert the separate keyframe before H3 n=0."
+    },
+    "V2_CODEX_EP02SC02_S00_outbound_h3": {
+      "status": "experiment_not_selected",
+      "purpose": "Fresh outbound ride-to-market shot generated from approved project scene, bike and protagonist assets; visual review only.",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "PRP-02-ebike",
+        "SCN-02-street"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-02_street_master.png"
+      ],
+      "load_images": [
+        "EP02_SCN02_S00_codex_preview_v1.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN02_S00_codex_preview_v1.png",
+      "shot_camera": "CAM0",
+      "fps": 24,
+      "frames": 192,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_SCN02_S00_outbound",
+      "video_output": "outputs/V2_CODEX_SCN02_S00_outbound/V2_CODEX_EP02SC02_S00_outbound_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_SCN02_S00_outbound/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_SCN02_S00_outbound/S00_outbound_end_frame_n191.png",
+      "handoff_frame_index": 191,
+      "end_frame_exclusive": 192,
+      "keyframe_provenance_note": "outputs/EP02_SCN02_S00_codex_preview_v1.md",
+      "selected_for_continuity_chain": false,
+      "qa_summary": "Not selected. The generated keyframe looked down the street while the locked CAM0 camera faces north across it; H3 began side-on, then reframed into a one-point view during the same shot. The output is retained for comparison only and was not used as input to v2."
+    },
+    "EP02_SCN03_BR03_dismount_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "Continue the actual parked-bike frame through dismount and a short approach to the pork counter.",
+      "asset_ids": ["CHR-01-body", "PRP-02-ebike", "SCN-03-market-entry"],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-03_market_entry_master_codex_v1.png"
+      ],
+      "load_images": ["handoff_n106.png"],
+      "first_frame_mode": "inherited_tail",
+      "first_frame": "outputs/EP02_SCN03_BR02_stall_stop/review_frames/handoff_n106.png",
+      "handoff": {
+        "previous_workflow": "EP02_SCN03_BR02_stall_stop_h3",
+        "previous_video": "outputs/EP02_SCN03_BR02_stall_stop/EP02_SCN03_BR02_stall_stop_h3_00001_.mp4",
+        "handoff_frame": "outputs/EP02_SCN03_BR02_stall_stop/review_frames/handoff_n106.png",
+        "handoff_frame_index": 106,
+        "previous_assembly_end_frame_exclusive": 107,
+        "fps": 24,
+        "handoff_time_s": 4.416667,
+        "previous_assembly_end_s": 4.458333
+      },
+      "shot_camera": "BR03_STALL_APPROACH",
+      "fps": 24,
+      "frames": 107,
+      "canvas": [1376, 768],
+      "output_dir": "outputs/EP02_SCN03_BR03_dismount",
+      "video_output": "outputs/EP02_SCN03_BR03_dismount/EP02_SCN03_BR03_dismount_h3_00001_.mp4"
+    },
+    "EP02_SCN03_BR02_stall_stop_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "Continue the actual entry video frame to the pork stall and stop the e-bike.",
+      "asset_ids": ["CHR-01-body", "PRP-02-ebike", "SCN-03-market-entry"],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-03_market_entry_master_codex_v1.png"
+      ],
+      "load_images": ["handoff_n080.png"],
+      "first_frame_mode": "inherited_tail",
+      "first_frame": "outputs/EP02_SCN03_BR01_market_arrival/review_frames/handoff_n080.png",
+      "handoff": {
+        "previous_workflow": "EP02_SCN03_BR01_market_arrival_h3",
+        "previous_video": "outputs/EP02_SCN03_BR01_market_arrival/EP02_SCN03_BR01_market_arrival_h3_00001_.mp4",
+        "handoff_frame": "outputs/EP02_SCN03_BR01_market_arrival/review_frames/handoff_n080.png",
+        "handoff_frame_index": 80,
+        "previous_assembly_end_frame_exclusive": 81,
+        "fps": 24,
+        "handoff_time_s": 3.333333,
+        "previous_assembly_end_s": 3.375
+      },
+      "shot_camera": "BR02_AISLE_REAR_FOLLOW",
+      "fps": 24,
+      "frames": 107,
+      "canvas": [1376, 768],
+      "output_dir": "outputs/EP02_SCN03_BR02_stall_stop",
+      "video_output": "outputs/EP02_SCN03_BR02_stall_stop/EP02_SCN03_BR02_stall_stop_h3_00001_.mp4"
+    },
+    "EP02_SCN03_BR01_market_arrival_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "Bridge from residential street to the wet-market entrance; one continuous ride toward the pork stall.",
+      "asset_ids": ["CHR-01-body", "CHR-01-face", "PRP-02-ebike", "SCN-02-street", "SCN-03-market-entry"],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-02_street_master.png",
+        "assets/SCN/SCN-03_market_entry_master_codex_v1.png"
+      ],
+      "load_images": ["EP02_SCN03_BR01_market_entry_codex_preview.png"],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN03_BR01_market_entry_codex_preview.png",
+      "shot_camera": "BR01_ENTRY_REAR",
+      "fps": 24,
+      "frames": 124,
+      "canvas": [1376, 768],
+      "output_dir": "outputs/EP02_SCN03_BR01_market_arrival",
+      "video_output": "outputs/EP02_SCN03_BR01_market_arrival/EP02_SCN03_BR01_market_arrival_h3_00001_.mp4"
+    },
+    "V2_CODEX_EP02SC02_S00_outbound_v2_h3": {
+      "status": "single_shot_visual_test",
+      "purpose": "Corrected S00 outbound ride-to-market shot. Keyframe camera is aligned to CAM0 to prevent H3 from changing the street axis mid-shot.",
+      "asset_ids": [
+        "CHR-01-body",
+        "CHR-01-face",
+        "PRP-02-ebike",
+        "SCN-02-street"
+      ],
+      "source_paths": [
+        "assets/CHR/PRODUCTION/C01_body_master.png",
+        "assets/CHR/PRODUCTION/C01_head_three_quarter_master.png",
+        "assets/PRP/PRP-02_ebike_master.png",
+        "assets/SCN/SCN-02_street_master.png"
+      ],
+      "load_images": [
+        "EP02_SCN02_S00_codex_preview_v2.png"
+      ],
+      "first_frame_mode": "asset_composite",
+      "first_frame": "outputs/EP02_SCN02_S00_codex_preview_v2.png",
+      "shot_camera": "CAM0",
+      "fps": 24,
+      "frames": 192,
+      "canvas": [
+        1376,
+        768
+      ],
+      "output_dir": "outputs/V2_CODEX_SCN02_S00_outbound_v2",
+      "video_output": "outputs/V2_CODEX_SCN02_S00_outbound_v2/V2_CODEX_EP02SC02_S00_outbound_v2_h3_00001_.mp4",
+      "actual_video_opening_frame": "outputs/V2_CODEX_SCN02_S00_outbound_v2/review_frames/first_n000.png",
+      "handoff_frame": "outputs/V2_CODEX_SCN02_S00_outbound_v2/S00_outbound_v2_end_frame_n191.png",
+      "handoff_frame_index": 191,
+      "end_frame_exclusive": 192,
+      "keyframe_provenance_note": "outputs/EP02_SCN02_S00_codex_preview_v2.md",
+      "selected_for_continuity_chain": true,
+      "selected_video_output": "outputs/V2_CODEX_SCN02_S00_outbound_v2/V2_CODEX_EP02SC02_S00_outbound_v2_h3_00001_.mp4",
+      "selected_actual_video_opening_frame": "outputs/V2_CODEX_SCN02_S00_outbound_v2/review_frames/first_n000.png",
+      "selected_handoff_frame": "outputs/V2_CODEX_SCN02_S00_outbound_v2/S00_outbound_v2_end_frame_n191.png",
+      "selected_handoff_frame_index": 191,
+      "selected_end_frame_exclusive": 192,
+      "selected_duration_s": 8.0,
+      "qa_summary": "Five sampled frames preserve the cross-street CAM0 axis, protagonist, blue-gray e-bike and empty rear seat; the sweeper stays far right and separate. H3 tracks/pans slightly with the rider and the eastern sky brightens more than planned, but it does not flip the street axis or replace the scene. Selected v2; v1 remains an unselected experiment."
+    }
+  },
+  "continuity_contract": {
+    "continuous_shot": {
+      "first_frame_mode": "inherited_tail",
+      "required_fields": [
+        "previous_workflow",
+        "previous_video",
+        "handoff_frame",
+        "fps",
+        "handoff_frame_index",
+        "previous_assembly_end_frame_exclusive",
+        "handoff_time_s",
+        "previous_assembly_end_s"
+      ],
+      "invariant": "previous_assembly_end_frame_exclusive 必须等于 handoff_frame_index + 1；秒数只作显示"
+    },
+    "camera_cut": {
+      "first_frame_mode": "asset_composite",
+      "required_fields": [
+        "asset_ids",
+        "source_paths",
+        "shot_camera",
+        "first_frame"
+      ],
+      "invariant": "全部 source_paths 必须来自 approved_assets；参考片与 FILM 裁剪禁止进入"
+    }
+  }
+}

@@ -322,6 +322,29 @@ def run_audit_gate(proj: Path, wf_name: str) -> bool:
     return True
 
 
+def run_production_guard(proj: Path, wf_name: str) -> bool:
+    """Run the project production lock before any bypassable legacy gate.
+
+    `--skip-gate` intentionally does not skip this check.  The production lock
+    exists to keep source provenance and shot handoffs correct even when chat
+    context is compressed or an experimental workflow has a new name.
+    """
+    gate = ROOT / "tools" / "production_guard.py"
+    lock = proj / "production" / "production_lock.json"
+    if not gate.exists() or not lock.exists():
+        return True
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, str(gate), "verify-workflow", proj.name, wf_name],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    print(result.stdout or "")
+    if result.returncode != 0:
+        print("⛔ production_guard 不可由 --skip-gate 跳过。")
+        return False
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="唯一执行器：跑项目里的画布工作流")
     ap.add_argument("project", nargs="?", help="项目名（projects/ 下的文件夹名）")
@@ -361,6 +384,8 @@ def main() -> int:
     if not wf_path.exists():
         return list_workflows(args.project) or 1
 
+    if not run_production_guard(proj, args.workflow):
+        return 1
     if not args.skip_gate and not run_gate(wf_path):
         return 1
     if not args.skip_gate and not run_audit_gate(proj, args.workflow):

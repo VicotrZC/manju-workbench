@@ -1,0 +1,19 @@
+{
+  "output": "outputs/EP02_market_arrival_bridge_with_h3_audio_v3.mp4",
+  "sources": [
+    "outputs/EP02_visual_rough_cut_with_h3_audio_v1.mp4",
+    "outputs/EP02_SCN03_BR01_market_arrival/EP02_SCN03_BR01_market_arrival_h3_00001_.mp4",
+    "outputs/EP02_SCN03_BR02_stall_stop/EP02_SCN03_BR02_stall_stop_h3_00001_.mp4",
+    "outputs/EP02_SCN03_BR03_dismount/EP02_SCN03_BR03_dismount_h3_00001_.mp4"
+  ],
+  "edit": [
+    "old cut frames 0-191",
+    "BR01 frames 0-80 (the chosen entry handoff)",
+    "BR02 frames 1-106 (duplicate first frame omitted)",
+    "BR03 frames 1-106 (duplicate first frame omitted)",
+    "old cut frames 192-end"
+  ],
+  "fps": 24,
+  "selected_video_frames": 1766,
+  "audio": "Retains the H3 audio of each included segment; existing speech quality is not corrected."
+}

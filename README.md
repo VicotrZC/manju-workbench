@@ -13,6 +13,7 @@
 | **接手干活** | [`规矩.md`](规矩.md) → [`projects/<项目>/项目卡.md`](projects) |
 | 用户手写的硬约束 | [`agent.md`](agent.md)（**位阶最高**） |
 | 跑一个生成任务 | `python tools/run.py <项目slug> <工作流名>` |
+| 连续镜头与首帧模型试验 | [`pipeline/docs/09_逐镜反馈与首帧评估.md`](pipeline/docs/09_逐镜反馈与首帧评估.md) |
 
 **新 AI / 新电脑 / 新聊天**：`git clone` 之后读上面那两个文件就能开工，
 不需要旧聊天记录。一切状态都在 git 里。

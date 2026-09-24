@@ -1,0 +1,41 @@
+{
+  "scene": "SCN-03",
+  "episode": "EP02",
+  "purpose": "补足从居民街道骑到菜市、停在猪肉摊并下车走到柜台的动作链",
+  "geography": "街道通向有顶菜市，猪肉摊位于入口后通道左侧，顾客沿通道前进并向左靠摊",
+  "scene_master": "assets/SCN/SCN-03_market_entry_master_codex_v1.png",
+  "fps": 24,
+  "shots": [
+    {
+      "id": "BR01",
+      "action": "从街道骑入菜市入口",
+      "first_frame": "outputs/EP02_SCN03_BR01_market_entry_codex_preview.png",
+      "workflow": "EP02_SCN03_BR01_market_arrival_h3",
+      "video": "outputs/EP02_SCN03_BR01_market_arrival/EP02_SCN03_BR01_market_arrival_h3_00001_.mp4",
+      "generated_frames": 124,
+      "selected_frames": [0, 80],
+      "handoff_frame": "outputs/EP02_SCN03_BR01_market_arrival/review_frames/handoff_n080.png"
+    },
+    {
+      "id": "BR02",
+      "action": "沿通道向左侧猪肉摊靠近并刹车停住",
+      "first_frame": "outputs/EP02_SCN03_BR01_market_arrival/review_frames/handoff_n080.png",
+      "workflow": "EP02_SCN03_BR02_stall_stop_h3",
+      "video": "outputs/EP02_SCN03_BR02_stall_stop/EP02_SCN03_BR02_stall_stop_h3_00001_.mp4",
+      "generated_frames": 107,
+      "selected_frames": [1, 106],
+      "handoff_frame": "outputs/EP02_SCN03_BR02_stall_stop/review_frames/handoff_n106.png"
+    },
+    {
+      "id": "BR03",
+      "action": "下车，把车停在摊前，走到柜台",
+      "first_frame": "outputs/EP02_SCN03_BR02_stall_stop/review_frames/handoff_n106.png",
+      "workflow": "EP02_SCN03_BR03_dismount_h3",
+      "video": "outputs/EP02_SCN03_BR03_dismount/EP02_SCN03_BR03_dismount_h3_00001_.mp4",
+      "generated_frames": 107,
+      "selected_frames": [1, 106],
+      "next_shot": "V2_CODEX_S01 原问价镜头"
+    }
+  ],
+  "assembly": "outputs/EP02_market_arrival_bridge_with_h3_audio_v3.mp4"
+}
